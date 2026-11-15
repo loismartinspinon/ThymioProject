@@ -19,6 +19,8 @@ MIN_OBSTACLE_AREA = 20     # blobs smaller than this (pixels) are noise
 # Half-size of the Thymio in pixels of the rectified map + safety margin
 ROBOT_RADIUS_PX = 8
 
+nest_position = []
+
 def detect_qr_codes(image):
     # QRCodeDetectorAruco is more robust: the standard QRCodeDetector
     # sometimes finds only 3 of the 4 QR codes (e.g. ThymioSetup2/3)
@@ -244,4 +246,4 @@ def fetch_status_cv(image):
         row, col = path[1] if len(path) > 1 else path[0]
         next_position = (col, row)   # (row, col) -> (x, y)
 
-    return [x, y, theta, next_position]
+    return [x, y, theta, path]
