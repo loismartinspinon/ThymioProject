@@ -437,8 +437,8 @@
     }
    ],
    "source": [
-    "x, y, theta, next_position = fetch_status_cv(cv2.imread(\"ThymioSetup4.jfif\"))\n",
-    "x, y, theta, next_position"
+    "## x, y, theta, next_position = fetch_status_cv(cv2.imread(\"ThymioSetup4.jfif\"))\n",
+    "## x, y, theta, next_position"
    ]
   }
  ],
