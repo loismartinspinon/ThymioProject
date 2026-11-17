@@ -107,3 +107,20 @@ async def move_to(node, target):
         return
     await turn_to(node, target)
     await go_forward(node, target)
+
+async def run(data):
+    """data = [x0, y0, theta0, path] with path = [(x1, y1), ..., (xf, yf)]"""
+    global current_angle
+    x0, y0, theta0, path = data
+
+    # State initialisation with the starting pose
+    current_position[0], current_position[1] = x0, y0
+    current_angle = convert_theta(theta0)
+
+    node = await client.wait_for_node()
+    await node.lock()
+    try:
+        await follow_path(node, path)
+    finally:
+        await set_motors(node, 0, 0)
+        await node.unlock()
