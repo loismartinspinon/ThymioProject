@@ -18,6 +18,8 @@ below would then fail with "Node lock error (current status: busy)".
 import numpy as np
 from tdmclient import ClientAsync
 
+import ln as local-nav
+
 
 # =============================================================================
 # Parameters to calibrate
@@ -101,6 +103,10 @@ async def go_forward(node, target):
     dy = target[1] - current_position[1]
     distance = np.hypot(dx, dy)
 
+    if (capteur > 1000) {
+        await ln.evitement 
+    }
+
     await set_motors(node, speed_forward, speed_forward)
     await client.sleep(distance / v_forward)
     await set_motors(node, 0, 0)
@@ -144,66 +150,3 @@ async def run(data):
         await set_motors(node, 0, 0)
         await node.unlock()
 
-
-# Test path (in cm)
-TEST_DATA = [0, 0, np.pi / 2, [
-    (0, 20),     # 1 : straight
-    (15, 20),    # 2 : to the right
-    (15, 40),    # 3 : up
-    (0, 40),     # 4 : to the left
-    (-15, 30),   # 5 : diagonal
-    (-15, 10),   # 6 : down
-]]
-
-
-# =============================================================================
-# Calibration of the rotation and translation speeds of the wheels
-# 1. await calibration("rotation") -> note the number of turns of each test
-# 2. await calibration("avance")   -> note the distance (cm) of each test
-# 3. compute_omega(turns) and compute_v_forward(distances) -> new omega / v_forward
-# =============================================================================
-
-async def essais(node, left, right):
-    for i in range(nb_essais):
-        print(f"Essai {i + 1}/{nb_essais} dans 3 s... (replace le robot)")
-        await client.sleep(3)
-        print("GO")
-        await set_motors(node, left, right)
-        await client.sleep(duree)
-        await set_motors(node, 0, 0)
-        print("STOP : note le résultat.")
-        if i < nb_essais - 1:
-            await client.sleep(pause)
-
-
-async def calibration(test):
-    node = await client.wait_for_node()
-    await node.lock()
-    try:
-        if test == "rotation":
-            await essais(node, speed_turn, -speed_turn)
-        else:
-            await essais(node, speed_forward, speed_forward)
-    finally:
-        await set_motors(node, 0, 0)
-        await node.unlock()
-
-
-def compute_omega(tours):
-    """tours = number of turns measured at each rotation test -> omega (rad/s)"""
-    omega = np.mean(tours) * 2 * np.pi / duree
-    print(f"omega = {omega:.3f} rad/s")
-    print(f"écart : {np.std(tours) * 2 * np.pi / duree:.3f} rad/s")
-    return omega
-
-
-def compute_v_forward(distances):
-    """distances = distances (cm) measured at each forward test -> v_forward (cm/s)"""
-    v = np.mean(distances) / duree
-    print(f"v_forward = {v:.3f} cm/s")
-    print(f"écart : {np.std(distances) / duree:.3f} cm/s")
-    return v
-
-
-if __name__ == "__main__":
-    client.run_async_program(lambda: run(TEST_DATA))
