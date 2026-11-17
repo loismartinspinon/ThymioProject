@@ -13,7 +13,6 @@ import math
 import numpy as np
 from math import sin, cos, atan2
 
-
 #Global variable 
 ROT_SPEED_TO_M_PER_S = 0.0003375  # needs to be calibrated
 WHEEL_BASE = 0.095 # needs to be calibrated
@@ -25,6 +24,7 @@ SIGMA_TH2 = 1e-3     # variance added per radian turned
 Q_MIN = 1e-8         # small floor so P never becomes exactly 0
 R = np.diag([1e-4, 1e-4, 1e-3])   # camera uncertainty
 H = np.eye(3)
+P = R.copy
 
 
 def wrap_to_pi(a):

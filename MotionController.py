@@ -1,15 +1,15 @@
 """
 Motion controller of the Thymio (from Barth_MotionController.ipynb).
 
-move_to(node, target): the robot turns on itself towards the target, then goes straight
-to it. Both moves are open loop (duration = angle / omega and distance / v_forward), with
-omega and v_forward calibrated in Barth_MotionController.ipynb.
+run(data) -> follow_path -> move_to: for each point of the path, the robot turns on itself
+towards the point, then goes straight to it. Both moves are open loop (duration =
+angle / omega and distance / v_forward), with omega and v_forward calibrated in
+Barth_MotionController.ipynb.
 
 Usage (main.ipynb):
     import MotionController as mc
-    mc.current_position[0], mc.current_position[1] = x, y     # pose measured by the camera
-    mc.current_angle = mc.convert_theta(theta)
-    await mc.move_to(node, target)
+    await mc.run([x0, y0, theta0, path])    # cm, theta0 in the THETA_CONVENTION below
+run() locks the Thymio itself and always stops the motors at the end.
 
 Requires Thymio Suite (Thymio Device Manager) running and the Thymio connected.
 Do not also use tdmclient.notebook.start(): it already locks the Thymio, and node.lock()
@@ -107,6 +107,13 @@ async def move_to(node, target):
         return
     await turn_to(node, target)
     await go_forward(node, target)
+
+
+async def follow_path(node, path):
+    for i, point in enumerate(path):
+        print(f"Point {i + 1}/{len(path)} : {point}")
+        await move_to(node, point)
+
 
 async def run(data):
     """data = [x0, y0, theta0, path] with path = [(x1, y1), ..., (xf, yf)]"""
