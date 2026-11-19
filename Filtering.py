@@ -24,7 +24,7 @@ SIGMA_TH2 = 1e-3     # variance added per radian turned
 Q_MIN = 1e-8         # small floor so P never becomes exactly 0
 R = np.diag([1e-4, 1e-4, 1e-3])   # camera uncertainty
 H = np.eye(3)
-P = R.copy
+P = R.copy()
 
 
 def wrap_to_pi(a):
