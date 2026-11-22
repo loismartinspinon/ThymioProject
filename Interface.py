@@ -17,7 +17,7 @@ import time
 import numpy as np
 import cv2
 
-from Vision_test import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
+from Vision import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
 
 
 # =============================================================================
