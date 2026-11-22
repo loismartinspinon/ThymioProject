@@ -27,7 +27,7 @@ from Vision_test import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
 CAMERA_INDEX = 0           # index of the camera given to cv2.VideoCapture
 CAMERA_WIDTH = 1280        # requested camera resolution (DSHOW default is often 640 x 480,
 CAMERA_HEIGHT = 720        # too small to detect the QR codes reliably)
-SNAPSHOT_PERIOD = 1.0      # seconds between two position updates
+SNAPSHOT_PERIOD = 0.2     # seconds between two position updates
 CALIBRATION_FRAMES = 10    # frames with the 4 QR codes needed to calibrate
 MAP_SCALE = 4              # display zoom of the rectified map (205 x 155 px is small)
 HEADING_LENGTH = 15        # length of the heading arrow, in map pixels
@@ -238,7 +238,8 @@ def run_interface():
     cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
-
+    cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+    
     if not cap.isOpened():
         print("Error: unable to open the camera")
     else:

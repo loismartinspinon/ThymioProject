@@ -9,7 +9,7 @@ TURN_SPEED = 120
 FRONT_THR = 1000
 FRONT_CLEAR = 300
 SIDE_SEEN = 300
-EXTRA_TIME = 0.7
+EXTRA_TIME = 1.5
 TURN_TIMEOUT = 4.0
 STEP = 0.05
 
@@ -36,10 +36,13 @@ def local_nav_step(p, mem):
 
     if mem["state"] == "TURN":
         parallel = front < FRONT_CLEAR and side_val > SIDE_SEEN
-        if parallel or now - mem["t_state"] > TURN_TIMEOUT:
+        if parallel:
             mem["state"], mem["t_lost"] = "PASS", None
             return (True, SPEED, SPEED)
-        return (True, *_turn(mem["side"]))
+        
+        if now - mem["t_state"] > TURN_TIMEOUT:
+            print("Attention : rotation locale trop longue !")
+            return (True, 0, 0)
 
     # state == "PASS"
     if front > FRONT_THR:                         # corner or new obstacle

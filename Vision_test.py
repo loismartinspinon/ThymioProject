@@ -17,7 +17,7 @@ GREY_THRESHOLD = 80        # grey level <= threshold -> obstacle
 MIN_OBSTACLE_AREA = 20     # blobs smaller than this (pixels) are noise
 
 # Half-size of the Thymio in pixels of the rectified map + safety margin
-ROBOT_RADIUS_PX = 8
+ROBOT_RADIUS_PX = 12
 
 nest_position = []
 
