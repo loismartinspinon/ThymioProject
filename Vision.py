@@ -1,8 +1,30 @@
+"""
+Objective: extract the data from the video in order to fetch the Thymio's position and angle, final position and the position of obstacles
+
+Implementation:
+- OpenCV: used to fetch the position of the green, red and blue points, and to define the visibility graph with obstacles
+- Trajectory computation: one decided to implement a A* method. This can be done as one knows the initial and final position.
+
+Use case:
+- File interface.py in order to display the defined status points into the interface
+
+This is the only file not used on the main.ipynb because it is indirectly used in the interface.py file.
+"""
+
+# =============================================================================
+# Import of libraries
+# =============================================================================
+
 import cv2
 import numpy as np
 import heapq
 
-# Size of the rectified map (pixels)
+
+# =============================================================================
+# Parameters
+# =============================================================================
+
+# Size of the rectified map in pixels
 MAP_WIDTH = 205
 MAP_HEIGHT = 155
 
@@ -13,37 +35,42 @@ LOWER_GREEN, UPPER_GREEN = np.array([35, 80, 80]), np.array([90, 255, 255])
 LOWER_BLUE, UPPER_BLUE = np.array([100, 100, 100]), np.array([130, 255, 255])
 
 # Obstacles
-GREY_THRESHOLD = 80        # grey level <= threshold -> obstacle
-MIN_OBSTACLE_AREA = 20     # blobs smaller than this (pixels) are noise
+GREY_THRESHOLD = 80        # threshold defining an obstacle color. if below this limit, it's consider as an obstacle
+MIN_OBSTACLE_AREA = 20     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
 
-# Half-size of the Thymio in pixels of the rectified map + safety margin
+# Thymio's half-size in pixels, considering a ...% margin
+# NEEDS TO BE CALCULATED/MEASURED
 ROBOT_RADIUS_PX = 12
 
 nest_position = []
 
+# Method for finding the QR code in the frame
+# MAYBE NEEDS TO BE CHANGED TO ARUCO TO IMPROVE THE DETECTION SUCCESS
 def detect_qr_codes(image):
-    # QRCodeDetectorAruco is more robust: the standard QRCodeDetector
-    # sometimes finds only 3 of the 4 QR codes (e.g. ThymioSetup2/3)
     points = None
+    # for loop considering at each iteration a new detected QR code
     for detector in (cv2.QRCodeDetectorAruco(), cv2.QRCodeDetector()):
         retval, points = detector.detectMulti(image)
+        # Condition if retval and points are defined, and if all the QR codes (amount of 4) are found
         if retval and points is not None and len(points) == 4:
             return points
+    # Returns the corner points of the frame, this will be used to define the use area and rectify the frame
     return points
 
 
+# Orders the corners by the following order: top left, top right, bottom right, bottom left
 def order_corners(p):
-    # Order a QR code's corners geometrically: TL, TR, BR, BL
     s = p.sum(axis=1)
     d = np.diff(p, axis=1).flatten()
     return np.array([
-        p[np.argmin(s)],  # top left
-        p[np.argmin(d)],  # top right
-        p[np.argmax(s)],  # bottom right
-        p[np.argmax(d)]   # bottom left
+        p[np.argmin(s)],  # Top left, defined with smallest sum
+        p[np.argmin(d)],  # Top right, defined with smallest difference
+        p[np.argmax(s)],  # Bottom right, defined with largest sum
+        p[np.argmax(d)]   # Bottom left, defined with largest difference
     ], dtype=np.float32)
 
 
+# 
 def rectify_image(image):
     points = detect_qr_codes(image)
 
@@ -79,52 +106,65 @@ def rectify_image(image):
 
     return rectified_image, markers, H
 
+# Defines the color points mapping used for red, green and blue points
 def color_masks(rectified_image):
+    # frame image converted into the color system
     hsv = cv2.cvtColor(rectified_image, cv2.COLOR_BGR2HSV)
-
+    
+    #WHY IS THAT DONE LIKE THAT? DIFFERENT FROM OTHER ONES
     mask_red = cv2.bitwise_or(
         cv2.inRange(hsv, LOWER_RED1, UPPER_RED1),
         cv2.inRange(hsv, LOWER_RED2, UPPER_RED2)
     )
+    # point position map definition
     mask_green = cv2.inRange(hsv, LOWER_GREEN, UPPER_GREEN)
     mask_blue = cv2.inRange(hsv, LOWER_BLUE, UPPER_BLUE)
 
     return mask_red, mask_green, mask_blue
 
 
+# Definition of the mean points of each mapped color points in order to get a precise coordinate point for the actual and final position
 def find_position(mask):
-    # Centroid (x, y) of the largest blob of the mask, None if nothing found
+    # Centroid definition for each point
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    # Define the contour of each color point in the map
     valid_contours = [c for c in contours if cv2.contourArea(c) > 5]
     if not valid_contours:
         return None
 
+    # NEEDS TO BE DEFINED
     M = cv2.moments(max(valid_contours, key=cv2.contourArea))
     if M["m00"] == 0:
         return None
 
+    # Defines the centroid of each point
     return (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
+
+# Definition of the visiblity graph
 def obstacle_map(rectified_image, color_mask, markers, H):
+    # Image conversion into grey colors
     grey_image = cv2.cvtColor(rectified_image, cv2.COLOR_BGR2GRAY)
 
     # Dark pixels, except the colored points
     color_mask = cv2.dilate(color_mask, np.ones((3, 3), np.uint8), iterations=1)
     obstacle_mask = (grey_image <= GREY_THRESHOLD) & (color_mask == 0)
 
-    # Remove the 4 QR codes: project their corners into the rectified image with H
+    # QR codes removed: corners projected with the homographic matrice H
     qr_mask = np.zeros((MAP_HEIGHT, MAP_WIDTH), dtype=np.uint8)
     qr_corners_rectified = cv2.perspectiveTransform(markers.reshape(-1, 1, 2), H).reshape(4, 4, 2)
+    # QR removal for each marker
     for qr in qr_corners_rectified:
         cv2.fillConvexPoly(qr_mask, np.round(qr).astype(np.int32), 255)
     qr_mask = cv2.dilate(qr_mask, np.ones((5, 5), np.uint8), iterations=1)
     obstacle_mask &= (qr_mask == 0)
 
-    # Remove the small noise blobs
+    # Small noise blobs removed
     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
         obstacle_mask.astype(np.uint8), connectivity=8
     )
+    # For loop for each small noise considered
     for label in range(1, n_labels):  # label 0 = background
         if stats[label, cv2.CC_STAT_AREA] < MIN_OBSTACLE_AREA:
             obstacle_mask[labels == label] = False
@@ -132,39 +172,51 @@ def obstacle_map(rectified_image, color_mask, markers, H):
     return obstacle_mask
 
 
+# Visibility graph definition
 def occupancy_grid_from(obstacle_mask):
-    # Grow every obstacle (and the map border) by the robot radius:
-    # the planning is then done for the centre of the robot
+    # Add a margin to the obstacles in order to consider the half-width of the Thymio
     kernel_size = 2 * ROBOT_RADIUS_PX + 1
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     inflated = cv2.dilate(obstacle_mask.astype(np.uint8), kernel)
 
+    # Fills the visibility graph with ones for each pixels included in the margin
     inflated[:ROBOT_RADIUS_PX, :] = 1
     inflated[-ROBOT_RADIUS_PX:, :] = 1
     inflated[:, :ROBOT_RADIUS_PX] = 1
     inflated[:, -ROBOT_RADIUS_PX:] = 1
 
-    return inflated.astype(bool)   # True = forbidden cell
+    return inflated.astype(bool)   # True means forbidden cell
 
+
+# Heuristic function defined with octile distance
+# DO WE REALLY WANT TO USE THIS NORM?
 def heuristic(a, b):
-    # Octile distance: exact cost on an 8-connected grid without obstacles
     dy, dx = abs(a[0] - b[0]), abs(a[1] - b[1])
     return (dx + dy) + (np.sqrt(2) - 2) * min(dx, dy)
 
 
+# A* planning path method
 def a_star(grid, start, goal):
+    # Defines the number of rows and columns
     rows, cols = grid.shape
 
-    # 8-connectivity: (d_row, d_col, cost)
+    # 8 possible moves used in this A* method
     moves = [(-1, 0, 1), (1, 0, 1), (0, -1, 1), (0, 1, 1),
              (-1, -1, np.sqrt(2)), (-1, 1, np.sqrt(2)),
              (1, -1, np.sqrt(2)), (1, 1, np.sqrt(2))]
 
-    open_set = [(heuristic(start, goal), 0.0, start)]   # (f, g, cell)
+    
+    open_set = [(heuristic(start, goal), 0.0, start)]
+    
+    # List of previous positions
     came_from = {}
+    
+    # Cost
     g_score = {start: 0.0}
     closed = set()
 
+    # Since open_set is defined, repeats this process
+    # PRECISE DESCRIPTION OF A* METHOD
     while open_set:
         _, g, current = heapq.heappop(open_set)
 
@@ -200,49 +252,54 @@ def a_star(grid, start, goal):
 
     return None
 
+
+# Method used to fetch the actual position and its angle, the final position and the predicted path
 def fetch_status_cv(image):
+    # Condition for fetching the status data: needs a video frame
     if image is None:
         raise ValueError("Image not found")
 
-    # 1. Camera calibration
+    # Calibration of camera
     rectified_image, markers, H = rectify_image(image)
 
-    # 2. Colored points
+    # Definiton of colored points coordinates
     mask_red, mask_green, mask_blue = color_masks(rectified_image)
     red_position = find_position(mask_red)
     green_position = find_position(mask_green)
     blue_position = find_position(mask_blue)
 
+    # Case not allowing to define the actual position of the Thymio
     if red_position is None or green_position is None:
         raise ValueError("Thymio not found: red or green point not detected")
+    # Case not allowing to define the final position
     if blue_position is None:
         raise ValueError("Goal not found: blue point not detected")
 
-    # 3. Thymio position and angle
+    # Thymio's position and angle definition
     x = (red_position[0] + green_position[0]) / 2
     y = (red_position[1] + green_position[1]) / 2
     theta = float(np.arctan2(green_position[1] - red_position[1],
                              green_position[0] - red_position[0]))
 
-    # 4. Obstacles
+    # Generation of occupancy grid to know where the obstacles stand
     color_mask = cv2.bitwise_or(cv2.bitwise_or(mask_red, mask_green), mask_blue)
     obstacle_mask = obstacle_map(rectified_image, color_mask, markers, H)
     occupancy_grid = occupancy_grid_from(obstacle_mask)
 
-    # 5. A* path (grid cells are (row, col) = (y, x))
+    # A* path computation
     start = (int(round(y)), int(round(x)))
     goal = (blue_position[1], blue_position[0])
 
-    # Start / goal inside an inflated obstacle: force them to free
     occupancy_grid[start] = False
     occupancy_grid[goal] = False
 
     path = a_star(occupancy_grid, start, goal)
 
+    # Case where no planned path is defined
     if path is None:
         next_position = None
     else:
-        # Next cell of the path (path[0] is the start itself)
+        # Defines the entire list of points for the planned path
         row, col = path[1] if len(path) > 1 else path[0]
         next_position = (col, row)   # (row, col) -> (x, y)
 
