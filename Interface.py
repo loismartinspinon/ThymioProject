@@ -38,7 +38,7 @@ MAP_SCALE = 4              # display zoom of the rectified map
 
 
 HEADING_LENGTH = 15        # arrow length for the Thymio's direction
-HEADING_OFFSET = -np.pi /  # arrow angular position for the Thymio's direction, counterclockwise is considered as negative and clockwise is considered as positive, where 0° is the angular orientation of the displayed direction vector
+HEADING_OFFSET = -np.pi / 2 # arrow angular position for the Thymio's direction, counterclockwise is considered as negative and clockwise is considered as positive, where 0° is the angular orientation of the displayed direction vector
 
 WINDOW_CAMERA = "Thymio - Camera Live" # window name for the camera visual
 WINDOW_MAP = "Thymio - Map"            # window name for the camera visual with planned path
