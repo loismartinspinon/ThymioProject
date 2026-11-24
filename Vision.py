@@ -25,8 +25,9 @@ import heapq
 # =============================================================================
 
 # Size of the rectified map in pixels
-MAP_WIDTH = 205
-MAP_HEIGHT = 155
+# Arena 100 x 56.25 cm (16:9, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
+MAP_WIDTH = 256
+MAP_HEIGHT = 144
 
 # HSV color ranges
 LOWER_RED1, UPPER_RED1 = np.array([0, 100, 100]), np.array([10, 255, 255])
@@ -38,24 +39,27 @@ LOWER_BLUE, UPPER_BLUE = np.array([100, 100, 100]), np.array([130, 255, 255])
 GREY_THRESHOLD = 80        # threshold defining an obstacle color. if below this limit, it's consider as an obstacle
 MIN_OBSTACLE_AREA = 20     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
 
-# Thymio's half-size in pixels, considering a ...% margin
-# NEEDS TO BE CALCULATED/MEASURED
-ROBOT_RADIUS_PX = 12
+# Thymio's half-size in pixels: half-width 5.5 cm + 0.5 cm margin = 6 cm -> 6 * 2.56 = 15 px
+ROBOT_RADIUS_PX = 15
 
 nest_position = []
 
-# Method for finding the QR code in the frame
-# MAYBE NEEDS TO BE CHANGED TO ARUCO TO IMPROVE THE DETECTION SUCCESS
-def detect_qr_codes(image):
-    points = None
-    # for loop considering at each iteration a new detected QR code
-    for detector in (cv2.QRCodeDetectorAruco(), cv2.QRCodeDetector()):
-        retval, points = detector.detectMulti(image)
-        # Condition if retval and points are defined, and if all the QR codes (amount of 4) are found
-        if retval and points is not None and len(points) == 4:
-            return points
-    # Returns the corner points of the frame, this will be used to define the use area and rectify the frame
-    return points
+# ArUco: dictionnaire 4x4, IDs 0-3 (comme dans les PDF de l'arène)
+ARUCO_DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+ARUCO_PARAMS = cv2.aruco.DetectorParameters()
+ARUCO_PARAMS.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX  # coins plus précis -> meilleure homographie
+ARUCO_DETECTOR = cv2.aruco.ArucoDetector(ARUCO_DICT, ARUCO_PARAMS)
+
+# ID du marqueur dans chaque coin de l'arène
+ID_TL, ID_TR, ID_BR, ID_BL = 3, 2, 1, 0
+
+def detect_aruco_markers(image):
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = ARUCO_DETECTOR.detectMarkers(grey)
+    if ids is None:
+        return {}
+    # {id: tableau (4, 2) des coins du marqueur}, en ignorant les IDs inconnus
+    return {int(i): c.reshape(4, 2) for c, i in zip(corners, ids.flatten()) if int(i) in (0, 1, 2, 3)}
 
 
 # Orders the corners by the following order: top left, top right, bottom right, bottom left
@@ -72,27 +76,19 @@ def order_corners(p):
 
 # 
 def rectify_image(image):
-    points = detect_qr_codes(image)
+    found = detect_aruco_markers(image)
+    missing = [i for i in (0, 1, 2, 3) if i not in found]
+    if missing:
+        raise ValueError(f"ArUco markers missing: {missing}")   # garder ValueError !
 
-    n_found = 0 if points is None else len(points)
-    if n_found != 4:
-        raise ValueError(f"Exactly 4 QR codes are required, found {n_found}")
+    # Coin extérieur de chaque marqueur = son coin le plus éloigné du centre de l'arène
+    centre = np.mean([found[i].mean(axis=0) for i in found], axis=0)
+    def outer(i):
+        c = found[i]
+        return c[np.argmax(np.linalg.norm(c - centre, axis=1))]
 
-    markers = np.array([order_corners(m) for m in points.reshape(4, 4, 2)])
-
-    # Sort QR codes top / bottom, then left / right
-    centers = markers.mean(axis=1)
-    idx = np.argsort(centers[:, 1])
-    top = sorted(markers[idx[:2]], key=lambda p: p[:, 0].mean())
-    bottom = sorted(markers[idx[2:]], key=lambda p: p[:, 0].mean())
-
-    # Take ONLY the 4 external corners
-    src = np.array([
-        top[0][0],       # top left QR: top left corner
-        top[1][1],       # top right QR: top right corner
-        bottom[1][2],    # bottom right QR: bottom right corner
-        bottom[0][3]     # bottom left QR: bottom left corner
-    ], dtype=np.float32)
+    src = np.array([outer(ID_TL), outer(ID_TR), outer(ID_BR), outer(ID_BL)], dtype=np.float32)
+    markers = np.array([found[i] for i in (ID_TL, ID_TR, ID_BR, ID_BL)], dtype=np.float32)  # (4, 4, 2)
 
     dst = np.array([
         [0, 0],
