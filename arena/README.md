@@ -7,12 +7,12 @@ Origin (0, 0) is the bottom-left corner of the arena. x points right, y points u
 
 | File | Content | Print |
 |---|---|---|
-| `arena_complete.pdf` | **Everything in one PDF** (18 pages, in the order below). Each page keeps its real size | Print only the pages you need, at **100 %** |
-| `arena_technical_drawing.pdf` | Sheet 1: dimensioned top view. Sheet 2: coordinate tables + assembly. Sheet 3: navigation analysis | A4 landscape (sheets 1 and 3 at 1:5) |
+| `arena_complete.pdf` | **Everything in one PDF** (12 pages, in the order below). Each page keeps its real size | Print only the pages you need, at **100 %** |
+| `arena_technical_drawing.pdf` | Sheet 1: dimensioned top view. Sheet 2: coordinate tables + assembly. Sheet 3: navigation analysis | A3 landscape (sheets 1 and 3 at 1:4) |
 | `arena_full_scale_1to1.pdf` | Full arena with markers and obstacles, plus a 2 cm white margin | 1040 × 602.5 mm, **100 %** |
-| `arena_tiled_A4_1to1.pdf` | Same arena split on 12 A4 tiles (4 × 3, 25 × 18.75 cm each) | A4 landscape, **100 %** |
-| `obstacles_sheet_A4.pdf` | The two 6 × 6 cm obstacles, with cut line and centre ticks | A4, **100 %** |
-| `aruco_markers_A4.pdf` | The four 5 × 5 cm markers, IDs 0–3, laid out like the arena | A4, **100 %** |
+| `arena_tiled_A3_1to1.pdf` | Same arena split on 6 A3 tiles (3 × 2, 33.33 × 28.125 cm each). No seam crosses an obstacle or a marker | A3 landscape, **100 %** |
+| `obstacles_sheet_A3.pdf` | The two 6 × 6 cm obstacles, with cut line and centre ticks | A3, **100 %** |
+| `aruco_markers_A3.pdf` | The four 5 × 5 cm markers, IDs 0–3, laid out like the arena | A3, **100 %** |
 | `generate_arena.py` | Generates all of the above (`pip install reportlab opencv-python`) | – |
 
 Every 1:1 sheet has a scale bar. Check it with a ruler after printing, and turn off "fit to page".

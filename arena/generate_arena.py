@@ -3,12 +3,13 @@ Generates the printable documents for the Thymio experimental arena
 (EPFL - Basics of Mobile Robotics).
 
 Outputs (written next to this script):
-    arena_technical_drawing.pdf   A4 landscape, 3 sheets: dimensioned top view (1:5),
+    arena_technical_drawing.pdf   A3 landscape, 3 sheets: dimensioned top view (1:4),
                                   coordinate tables, navigation analysis
     arena_full_scale_1to1.pdf     single 1040 x 602.5 mm page (arena + 20 mm margin), 1:1
-    arena_tiled_A4_1to1.pdf       same arena split on 12 A4 sheets (4 x 3), 1:1
-    obstacles_sheet_A4.pdf        the two 6 x 6 cm obstacles, 1:1
-    aruco_markers_A4.pdf          the four 5 x 5 cm ArUco markers (IDs 0-3), 1:1
+    arena_tiled_A3_1to1.pdf       same arena split on 6 A3 sheets (3 x 2), 1:1
+    obstacles_sheet_A3.pdf        the two 6 x 6 cm obstacles, 1:1
+    aruco_markers_A3.pdf          the four 5 x 5 cm ArUco markers (IDs 0-3), 1:1
+    arena_complete.pdf            all of the above in one PDF
 
 Requires: reportlab, opencv-python (>= 4.7, for cv2.aruco)
     pip install reportlab opencv-python
@@ -25,7 +26,7 @@ import math
 import cv2
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A3, A4, landscape
 from reportlab.lib.colors import Color, black, white
 from reportlab.lib.utils import simpleSplit
 
@@ -69,6 +70,15 @@ LOCAL_ZONE = (63.0, 22.0, 85.0, 42.0)      # x0, y0, x1, y1: free area for a han
 RECT_PX_PER_CM = 19.2                      # 1920 px / 100 cm (rectified 1920 x 1080 map)
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Paper. The technical drawing is laid out in A4-landscape units and scaled up
+# by K so that it fills an A3 sheet; its arena drawing is at 1:4 on the paper.
+PAPER = A3
+PAPER_NAME = "A3"
+K = PAPER[0] / A4[0]                       # A3 / A4 = sqrt(2)
+DRAW_SCALE = 4                             # 1:4 on A3
+DRAW_MM_PER_CM = 10.0 / DRAW_SCALE / K     # in A4 layout units
+SCALE_TEXT = f"1:{DRAW_SCALE} on {PAPER_NAME}"
 
 GREY_LIGHT = Color(0.86, 0.86, 0.86)
 GREY_MID = Color(0.55, 0.55, 0.55)
@@ -293,9 +303,10 @@ def table(c, x, y, col_w, rows, size=7.5, row_h=5.2 * mm, header=True):
 # =============================================================================
 
 def sheet_top_view(c):
-    W, H = landscape(A4)
-    f = Frame(45, 60, 2.0)          # 1:5 -> 1 cm of arena = 2 mm on paper
-    title_block(c, W, H, 1, 3, "Thymio experimental arena - dimensioned top view", "1:5 on A4")
+    W, H = landscape(A4)            # layout units, scaled by K onto the A3 page
+    c.scale(K, K)
+    f = Frame(52, 62, DRAW_MM_PER_CM)   # 1:4 on A3 -> 1 cm of arena = 2.5 mm on paper
+    title_block(c, W, H, 1, 3, "Thymio experimental arena - dimensioned top view", SCALE_TEXT)
 
     c.setFont("Helvetica-Bold", 12)
     c.setFillColor(black)
@@ -433,6 +444,7 @@ def sheet_top_view(c):
 
 def sheet_coordinates(c):
     W, H = landscape(A4)
+    c.scale(K, K)
     title_block(c, W, H, 2, 3, "Thymio experimental arena - coordinates", "-")
     c.setFillColor(black)
     c.setFont("Helvetica-Bold", 12)
@@ -513,10 +525,10 @@ def sheet_coordinates(c):
     steps = [
         "1. Plotter: print arena_full_scale_1to1.pdf (1040 x 602.5 mm) at 100 % on white matte paper. "
         "Do not trim the 2 cm white margin (ArUco quiet zone). Check the 100 mm scale bar.",
-        "2. No plotter: print arena_tiled_A4_1to1.pdf (12 x A4, 100 %), trim only joining edges, butt-join and tape on "
-        "the back. Make sure no white gap splits an obstacle - or place the cut-outs of obstacles_sheet_A4.pdf on top.",
-        "3. Alternative: on any white matte 100 x 56.25 cm surface, place the 4 cut markers of aruco_markers_A4.pdf "
-        "(outer corner on the arena corner, 'top' arrow towards +y) and the 2 obstacles of obstacles_sheet_A4.pdf "
+        "2. No plotter: print arena_tiled_A3_1to1.pdf (6 x A3, 100 %), trim only joining edges, butt-join and tape on "
+        "the back. No tile seam crosses an obstacle or a marker.",
+        "3. Alternative: on any white matte 100 x 56.25 cm surface, place the 4 cut markers of aruco_markers_A3.pdf "
+        "(outer corner on the arena corner, 'top' arrow towards +y) and the 2 obstacles of obstacles_sheet_A3.pdf "
         "at the coordinates above.",
         "4. Mount the camera so the four markers are fully visible with some white around them; no other dark objects "
         "inside the arena.",
@@ -527,12 +539,13 @@ def sheet_coordinates(c):
 
 def sheet_navigation(c):
     W, H = landscape(A4)
-    title_block(c, W, H, 3, 3, "Thymio experimental arena - navigation analysis", "1:5 on A4")
+    c.scale(K, K)
+    title_block(c, W, H, 3, 3, "Thymio experimental arena - navigation analysis", SCALE_TEXT)
     c.setFillColor(black)
     c.setFont("Helvetica-Bold", 12)
     c.drawString(14 * mm, H - 13 * mm, "LAYOUT RATIONALE - navigation analysis")
 
-    f = Frame(14, 80, 2.0)
+    f = Frame(24, 84, DRAW_MM_PER_CM)
 
     # arena
     c.setStrokeColor(black)
@@ -727,7 +740,7 @@ def close_canvas(c, own, path):
 
 def build_technical_drawing(c=None):
     path = os.path.join(OUT_DIR, "arena_technical_drawing.pdf")
-    c, own = open_canvas(c, path, landscape(A4), "Thymio arena - technical drawing")
+    c, own = open_canvas(c, path, landscape(PAPER), "Thymio arena - technical drawing")
     sheet_top_view(c)
     c.showPage()
     sheet_coordinates(c)
@@ -789,14 +802,14 @@ def build_full_scale(c=None):
 
 
 def build_tiled(c=None):
-    """1:1 arena on 4 x 3 A4 landscape sheets, each tile 250 x 187.5 mm."""
-    path = os.path.join(OUT_DIR, "arena_tiled_A4_1to1.pdf")
-    PW, PH = landscape(A4)
-    tw, th = 250.0, 187.5                       # tile size, mm
-    ncol, nrow = 4, 3
+    """1:1 arena on 3 x 2 A3 landscape sheets, each tile 333.3 x 281.25 mm."""
+    path = os.path.join(OUT_DIR, f"arena_tiled_{PAPER_NAME}_1to1.pdf")
+    PW, PH = landscape(PAPER)
+    ncol, nrow = 3, 2
+    tw, th = ARENA_W * 10 / ncol, ARENA_H * 10 / nrow   # tile size, mm
     ox = (PW / mm - tw) / 2
     oy = (PH / mm - th) / 2
-    c, own = open_canvas(c, path, (PW, PH), "Thymio arena 1:1 - tiled on 12 A4 sheets")
+    c, own = open_canvas(c, path, (PW, PH), f"Thymio arena 1:1 - tiled on {ncol * nrow} {PAPER_NAME} sheets")
     for row in range(nrow - 1, -1, -1):          # print top row first
         for col in range(ncol):
             c.saveState()
@@ -814,8 +827,10 @@ def build_tiled(c=None):
             c.rotate(90)
             c.setFont("Helvetica", 6.5)
             c.setFillColor(GREY_DARK)
-            c.drawString(0, 0, f"Tile {n}/12 - row {nrow - row} (from top), column {col + 1} - "
-                               f"x {col * 25:g}-{(col + 1) * 25:g} cm, y {row * 18.75:g}-{(row + 1) * 18.75:g} cm")
+            twc, thc = tw / 10, th / 10
+            c.drawString(0, 0, f"Tile {n}/{ncol * nrow} - row {nrow - row} (from top), column {col + 1} - "
+                               f"x {col * twc:.2f}-{(col + 1) * twc:.2f} cm, "
+                               f"y {row * thc:.3f}-{(row + 1) * thc:.3f} cm")
             c.drawString(0, -3.2 * mm, "Print at 100 %. Trim only the edges that join another tile, butt-join, tape on the back.")
             c.restoreState()
             c.saveState()
@@ -832,9 +847,9 @@ def build_tiled(c=None):
 # =============================================================================
 
 def build_obstacle_sheet(c=None):
-    path = os.path.join(OUT_DIR, "obstacles_sheet_A4.pdf")
-    PW, PH = A4
-    c, own = open_canvas(c, path, A4, "Thymio arena - obstacles 1:1")
+    path = os.path.join(OUT_DIR, f"obstacles_sheet_{PAPER_NAME}.pdf")
+    PW, PH = PAPER
+    c, own = open_canvas(c, path, PAPER, "Thymio arena - obstacles 1:1")
     c.setFillColor(black)
     c.setFont("Helvetica-Bold", 14)
     c.drawString(20 * mm, PH - 22 * mm, "Obstacles - print at 100 % (actual size)")
@@ -845,7 +860,7 @@ def build_obstacle_sheet(c=None):
               20 * mm, PH - 30 * mm, PW - 40 * mm, size=8.5)
 
     f = Frame(0, 0, 10.0)
-    centres_mm = [(PW / mm / 2, 185.0), (PW / mm / 2, 95.0)]
+    centres_mm = [(PW / mm / 2 - 25, PH / mm - 140.0), (PW / mm / 2 - 25, PH / mm - 260.0)]
     for (name, (ax, ay)), (cx_mm, cy_mm) in zip(OBSTACLES, centres_mm):
         centre = (cx_mm / 10, cy_mm / 10)        # Frame(0,0,10): 1 cm -> 10 mm
         draw_obstacle(c, f, centre)
@@ -886,9 +901,9 @@ def build_obstacle_sheet(c=None):
 
 
 def build_marker_sheet(c=None):
-    path = os.path.join(OUT_DIR, "aruco_markers_A4.pdf")
-    PW, PH = A4
-    c, own = open_canvas(c, path, A4, f"Thymio arena - ArUco markers {ARUCO_DICT_NAME} IDs 0-3")
+    path = os.path.join(OUT_DIR, f"aruco_markers_{PAPER_NAME}.pdf")
+    PW, PH = PAPER
+    c, own = open_canvas(c, path, PAPER, f"Thymio arena - ArUco markers {ARUCO_DICT_NAME} IDs 0-3")
     c.setFillColor(black)
     c.setFont("Helvetica-Bold", 14)
     c.drawString(20 * mm, PH - 22 * mm, f"ArUco markers {ARUCO_DICT_NAME} - print at 100 % (actual size)")
@@ -899,7 +914,8 @@ def build_marker_sheet(c=None):
               20 * mm, PH - 30 * mm, PW - 40 * mm, size=8.5)
 
     f = Frame(0, 0, 10.0)
-    pos_mm = {3: (60.0, 195.0), 2: (150.0, 195.0), 0: (60.0, 105.0), 1: (150.0, 105.0)}
+    xl, xr_, yt, yb = PW / mm / 2 - 55, PW / mm / 2 + 55, PH / mm - 140.0, PH / mm - 260.0
+    pos_mm = {3: (xl, yt), 2: (xr_, yt), 0: (xl, yb), 1: (xr_, yb)}
     for mid, name, (ax, ay) in MARKERS:
         cx_mm, cy_mm = pos_mm[mid]
         draw_marker(c, f, mid, (cx_mm / 10, cy_mm / 10))
@@ -945,7 +961,7 @@ BUILDERS = (build_technical_drawing, build_full_scale, build_tiled,
 def build_combined():
     """All documents in one PDF (pages keep their own physical size)."""
     path = os.path.join(OUT_DIR, "arena_complete.pdf")
-    c = canvas.Canvas(path, pagesize=landscape(A4))
+    c = canvas.Canvas(path, pagesize=landscape(PAPER))
     c.setTitle("Thymio arena - complete set (drawing, 1:1 arena, tiles, obstacles, markers)")
     for build in BUILDERS:
         build(c)
