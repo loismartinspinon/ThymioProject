@@ -168,6 +168,12 @@ def obstacle_map(rectified_image, color_mask, markers, H):
     return obstacle_mask
 
 
+# Obstacles positions for the display: list of (cx, cy, x, y, w, h) in map pixels (centre + bounding box)
+def obstacle_positions(obstacle_mask):
+    n_labels, _, stats, centroids = cv2.connectedComponentsWithStats(obstacle_mask.astype(np.uint8), connectivity=8)
+    return [(*centroids[k], *stats[k, :4]) for k in range(1, n_labels)]
+
+
 # Visibility graph definition
 def occupancy_grid_from(obstacle_mask):
     # Add a margin to the obstacles in order to consider the half-width of the Thymio
@@ -299,4 +305,4 @@ def fetch_status_cv(image):
         row, col = path[1] if len(path) > 1 else path[0]
         next_position = (col, row)   # (row, col) -> (x, y)
 
-    return [x, y, theta, path]
+    return [x, y, theta, path, obstacle_positions(obstacle_mask)]

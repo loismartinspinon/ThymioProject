@@ -86,3 +86,12 @@ def kalman(state, P, speed_left, speed_right, dt, camera_pose):
     state_new[2] = wrap_to_pi(state_new[2])
     P_new = (np.eye(3) - K @ H) @ P_pred
     return state_new, P_new
+
+
+# Share of the camera in the next Kalman correction (Kalman gain K): 1 = camera only, 0 = odometry only.
+# The camera updates in main are done with dt = 0 (no motion), so P_pred = P + Q_MIN.
+# Returns (position x/y, theta)
+def camera_weight(P):
+    P_pred = P + Q_MIN * np.eye(3)
+    K = P_pred @ H.T @ np.linalg.inv(H @ P_pred @ H.T + R)
+    return float(np.mean(np.diag(K)[:2])), float(K[2, 2])
