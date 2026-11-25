@@ -33,14 +33,14 @@ MAP_HEIGHT = 144
 LOWER_RED1, UPPER_RED1 = np.array([0, 100, 100]), np.array([10, 255, 255])
 LOWER_RED2, UPPER_RED2 = np.array([160, 100, 100]), np.array([180, 255, 255])
 LOWER_GREEN, UPPER_GREEN = np.array([35, 80, 80]), np.array([90, 255, 255])
-LOWER_BLUE, UPPER_BLUE = np.array([100, 100, 100]), np.array([130, 255, 255])
+LOWER_BLUE, UPPER_BLUE = np.array([100, 120, 30]), np.array([150, 255, 220])
 
 # Obstacles
-GREY_THRESHOLD = 80        # threshold defining an obstacle color. if below this limit, it's consider as an obstacle
-MIN_OBSTACLE_AREA = 20     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
+GREY_THRESHOLD = 60        # threshold defining an obstacle color. if below this limit, it's consider as an obstacle
+MIN_OBSTACLE_AREA = 40     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
 
-# Thymio's half-size in pixels: half-width 5.5 cm + 0.5 cm margin = 6 cm -> 6 * 2.56 = 15 px
-ROBOT_RADIUS_PX = 15
+# Thymio's half-size in pixels: half-width 5.5 cm + 0.5 cm margin = 6 cm -> 6 * 2.56 = 15 px. Jonas : J'ai augmenté un peux (ancienne valeurs : 15)
+ROBOT_RADIUS_PX = 20
 
 nest_position = []
 

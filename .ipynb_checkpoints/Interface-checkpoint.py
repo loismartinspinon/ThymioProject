@@ -28,7 +28,7 @@ from Vision import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
 # Parameters
 # =============================================================================
 
-CAMERA_INDEX = 0           # index of the camera given to cv2.VideoCapture
+CAMERA_INDEX = 0           # index of the camera given to cv2.VideoCapture TO CHANGE IF 2 THERE IS AN INBUILT CAMERA ON THE PC
 CAMERA_WIDTH = 1280        # camera resolution (width) [???]
 CAMERA_HEIGHT = 720        # camera resolution (height) [???]
 
@@ -124,20 +124,22 @@ def calibrate_camera(cap):
 #    path: defined path with A* method, defined as a list of (x,y) points, None if no path found
 #    next: next position to be aimed, considered as the 1st element of the path array
 #    error: ValueError message given by fetch_status_cv()
+#    obstacles: detected obstacles, list of (cx, cy, x, y, w, h) in map pixels (centre + bounding box)
+#    kalman, nav (optional, set by main.ipynb): camera share in the Kalman correction, "Global" / "Local" navigation
 # =============================================================================
 
 def take_snapshot(frame):
     try:
-        x, y, theta, path = fetch_status_cv(frame)
+        x, y, theta, path, obstacles = fetch_status_cv(frame)
     except ValueError as e:
-        return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e)}
+        return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e), "obstacles": None}
 
     next_position = None
     if path is not None:
         path = [(col, row) for row, col in path]    # (row, col) cells -> (x, y) points
         next_position = path[1] if len(path) > 1 else path[0]
 
-    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position, "error": None}
+    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position, "error": None, "obstacles": obstacles}
     
 # =============================================================================
 # Data display
@@ -169,6 +171,16 @@ def status_lines(state, stale):
         lines.append((f"Position: ({x:.1f}, {y:.1f}) px", (0, 255, 0)))
         lines.append((f"Theta: {np.degrees(state['theta']):.1f} deg", (0, 255, 0)))
         lines.append((f"Next position: {state['next']}", (0, 255, 255)))
+    # Kalman: share of the camera vs the odometry in the correction (given by main.ipynb)
+    if state.get("kalman") is not None:
+        w_pos, w_th = state["kalman"]
+        lines.append((f"Kalman: camera {100 * w_pos:.0f}% / odometry {100 * (1 - w_pos):.0f}% (theta: camera {100 * w_th:.0f}%)", (255, 255, 0)))
+    # Navigation mode used for the last move (given by main.ipynb)
+    if state.get("nav") is not None:
+        lines.append((f"Navigation: {state['nav']}", (255, 255, 0)))
+    # Obstacles detected by the camera (centre in map pixels)
+    for i, o in enumerate(state.get("obstacles") or []):
+        lines.append((f"Obstacle {i + 1}: ({o[0]:.1f}, {o[1]:.1f}) px", (255, 0, 255)))
     # TO BE DEFINED
     if stale:
         lines.append(("Last known position (not updated)", (0, 0, 255)))
@@ -220,6 +232,10 @@ def draw_map(rectified, state, stale):
     if state["path"] is not None:
         pts = np.array([m(p) for p in state["path"]], dtype=np.int32)
         cv2.polylines(img, [pts], False, (0, 255, 255), 2)
+
+    # Obstacles detected: bounding box in magenta
+    for o in state.get("obstacles") or []:
+        cv2.rectangle(img, m(o[2:4]), m((o[2] + o[4], o[3] + o[5])), (255, 0, 255), 2)
 
     return img
 

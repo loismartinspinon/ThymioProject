@@ -15,6 +15,7 @@ Requires Thymio Suite (Thymio Device Manager) running and the Thymio connected.
 Do not also use tdmclient.notebook.start(): it already locks the Thymio, and node.lock()
 below would then fail with "Node lock error (current status: busy)".
 """
+import time
 import numpy as np
 from tdmclient import ClientAsync
 
@@ -86,7 +87,6 @@ async def set_motors(node, left, right):
 # =============================================================================
 
 def astolfi_controller(x, y, theta, goal):
-
     delta_x = goal[0] - x
     delta_y = goal[1] - y
 
@@ -94,9 +94,8 @@ def astolfi_controller(x, y, theta, goal):
     alpha = wrap_to_pi(-theta + np.arctan2(delta_y, delta_x))
     beta = wrap_to_pi(-theta - alpha)
 
-    v = k_rho * rho
+    v = k_rho * rho * max(0.0, np.cos(alpha))    # slow down when not facing the goal
     w = k_alpha * alpha + k_beta * beta
-
     return v, w
 
 def v_w_to_motors(v, w):
@@ -148,30 +147,33 @@ async def move_to(node, target):
     await go_forward(node, target)
 
 async def move_to_deux(node, target, is_last):
+    global current_angle
     x, y = current_position[0], current_position[1]
-    theta = convert_theta(current_angle)
-    if is_last :
-        rayon = 2
-    else :
-        rayon = 5
-    while rho > rayon :
+    theta = robot_to_math(current_angle)          # math convention: 0 = +x, CCW positive
+    radius = 2 if is_last else 5
+    rho = np.hypot(target[0] - x, target[1] - y)
+    t_prev = time.perf_counter()
+
+    while rho > radius:
         v, w = astolfi_controller(x, y, theta, target)
-        speed_left, speed_right = v_w_to_motors(v,w)
+        speed_left, speed_right = v_w_to_motors(v, w)
         await set_motors(node, speed_left, speed_right)
         await client.sleep(dt)
 
-        v_applied = (speed_right + speed_left) / 2 / speed_factor      # cm/s
-        w_applied = (speed_right - speed_left) / 2 / speed_factor / l  # rad/s
-        
-        theta += w_applied * dt                         # New theta
-        x += v_applied * np.cos(theta) * dt   # New x
-        y += v_applied * np.sin(theta) * dt   # New y
+        now = time.perf_counter()
+        step = now - t_prev                       # real elapsed time
+        t_prev = now
 
+        v_applied = (speed_right + speed_left) / 2 / speed_factor       # cm/s
+        w_applied = (speed_right - speed_left) / 2 / speed_factor / l   # rad/s
+
+        theta += w_applied * step
+        x += v_applied * np.cos(theta) * step
+        y += v_applied * np.sin(theta) * step
         rho = np.hypot(target[0] - x, target[1] - y)
 
     current_position[0], current_position[1] = x, y
     current_angle = robot_to_math(theta)
-
 
 
 async def follow_path(node, path):
@@ -196,3 +198,45 @@ async def run(data):
     finally:
         await set_motors(node, 0, 0)
         await node.unlock()
+
+
+SEGMENT_TIME = 1.0    # s of driving between two camera frames (to tune)
+
+async def move_segment(pose, target, is_last=False):
+    """pose = (x, y, theta) in cm and rad (math convention), target in cm.
+    Returns the list of (left, right, step) applied, for the Kalman prediction."""
+    x, y, theta = pose
+    radius = 2 if is_last else 5
+    moves = []
+
+    node = await client.wait_for_node()
+    await node.lock()
+    try:
+        t_start = t_prev = time.perf_counter()
+        while time.perf_counter() - t_start < SEGMENT_TIME:
+            if np.hypot(target[0] - x, target[1] - y) < radius:
+                break
+            v, w = astolfi_controller(x, y, theta, target)
+            left, right = v_w_to_motors(v, w)
+            await set_motors(node, left, right)
+            await client.sleep(dt)
+
+            now = time.perf_counter()
+            step = now - t_prev
+            t_prev = now
+
+            v_applied = (right + left) / 2 / speed_factor
+            w_applied = (right - left) / 2 / speed_factor / l
+            theta += w_applied * step
+            x += v_applied * np.cos(theta) * step
+            y += v_applied * np.sin(theta) * step
+            moves.append((left, right, step))
+    finally:
+        await set_motors(node, 0, 0)
+        await node.unlock()
+    return moves
+
+async def open_node():
+    node = await client.wait_for_node()
+    await node.lock()
+    return node

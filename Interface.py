@@ -28,7 +28,7 @@ from Vision import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
 # Parameters
 # =============================================================================
 
-CAMERA_INDEX = 0           # index of the camera given to cv2.VideoCapture
+CAMERA_INDEX = 0           # index of the camera given to cv2.VideoCapture TO CHANGE IF 2 THERE IS AN INBUILT CAMERA ON THE PC
 CAMERA_WIDTH = 1280        # camera resolution (width) [???]
 CAMERA_HEIGHT = 720        # camera resolution (height) [???]
 

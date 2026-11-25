@@ -1,28 +1,27 @@
+import math
 import time
-import numpy as np
-import MotionController as mc
-from tdmclient import ClientAsync
 
-# ---------- constants ----------
 SPEED = 100
 TURN_SPEED = 120
-FRONT_THR = 1000
-FRONT_CLEAR = 300
-SIDE_SEEN = 300
-EXTRA_TIME = 1.5
+FRONT_THR = 1000          # obstacle too close ahead -> enter local nav (to tune)
+FRONT_CLEAR = 300         # front considered clear below this
+SIDE_SEEN = 300           # side sensor sees the object above this
+SIDE_TARGET = 1200        # side sensor value to keep while following (to tune)
+FOLLOW_GAIN = 0.1         # to tune
+MAX_ERR = 400
+ALPHA_TOL = math.radians(15)   # "same angle": exit when |alpha| is below this
 TURN_TIMEOUT = 4.0
-STEP = 0.05
 
 def new_local_nav_memory():
-    return {"state": "OFF", "side": None, "t_state": 0.0, "t_lost": None}
+    return {"state": "OFF", "side": None, "t_state": 0.0}
 
-def _turn(side):
-    # obstacle on the left -> spin right, and the opposite
+def _spin(side):
+    # object on the left -> spin right, and the opposite
     return (TURN_SPEED, -TURN_SPEED) if side == "left" else (-TURN_SPEED, TURN_SPEED)
 
-def local_nav_step(p, mem):
-    """Call at every loop with p = prox_horizontal.
-    Returns (active, left, right). active = False means: use global navigation."""
+def local_nav_step(p, mem, alpha):
+    """p = prox_horizontal, alpha = heading error to the target (rad).
+    Returns (active, left, right). active = False -> use global navigation."""
     now = time.time()
     front = max(p[1], p[2], p[3])
 
@@ -32,45 +31,29 @@ def local_nav_step(p, mem):
         mem["side"] = "left" if (p[0] + p[1]) >= (p[3] + p[4]) else "right"
         mem["state"], mem["t_state"] = "TURN", now
 
-    side_val = p[0] if mem["side"] == "left" else p[4]
+    side = mem["side"]
+    side_val = p[0] if side == "left" else p[4]
 
+    # --- TURN: spin until parallel to the object ---
     if mem["state"] == "TURN":
         parallel = front < FRONT_CLEAR and side_val > SIDE_SEEN
-        if parallel:
-            mem["state"], mem["t_lost"] = "PASS", None
-            return (True, SPEED, SPEED)
-        
-        if now - mem["t_state"] > TURN_TIMEOUT:
-            print("Attention : rotation locale trop longue !")
-            return (True, 0, 0)
+        if parallel or now - mem["t_state"] > TURN_TIMEOUT:
+            mem["state"] = "FOLLOW"
+        else:
+            return (True, *_spin(side))
 
-    # state == "PASS"
-    if front > FRONT_THR:                         # corner or new obstacle
+    # --- FOLLOW: drive along the object ---
+    if front > FRONT_THR:                       # corner or new obstacle ahead
         mem["state"], mem["t_state"] = "TURN", now
-        return (True, *_turn(mem["side"]))
-    if side_val < SIDE_SEEN:
-        if mem["t_lost"] is None:
-            mem["t_lost"] = now
-        elif now - mem["t_lost"] > EXTRA_TIME:
-            mem["state"] = "OFF"                  # done, back to global
-            return False, 0, 0
-    else:
-        mem["t_lost"] = None
-    return True, SPEED, SPEED
+        return (True, *_spin(side))
 
-async def avoid(mem):
-    node = await mc.client.wait_for_node()
-    await node.lock()
-    moves = []
-    try:
-        await node.wait_for_variables({"prox.horizontal"})
-        active, left, right = local_nav_step(list(node.v.prox.horizontal), mem)
-        while active:
-            await mc.set_motors(node, left, right)
-            await mc.client.sleep(STEP)
-            moves.append((left, right, STEP))
-            active, left, right = local_nav_step(list(node.v.prox.horizontal), mem)
-    finally:
-        await mc.set_motors(node, 0, 0)
-        await node.unlock()
-    return moves
+    if front < FRONT_CLEAR and abs(alpha) < ALPHA_TOL:
+        mem["state"] = "OFF"                    # facing the target: back to global
+        return False, 0, 0
+
+    # keep the side sensor near SIDE_TARGET; if the object is lost, curve toward it
+    err = max(-MAX_ERR, min(MAX_ERR, side_val - SIDE_TARGET))
+    s = 1 if side == "left" else -1
+    left = SPEED + s * FOLLOW_GAIN * err
+    right = SPEED - s * FOLLOW_GAIN * err
+    return True, left, right
