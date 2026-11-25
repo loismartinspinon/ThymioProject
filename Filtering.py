@@ -8,6 +8,11 @@ Filtering: estimation of the Thymio pose (x, y, theta) (from Filtering.ipynb).
 Initialisation (in main): state = camera pose of the first frame, P = R.copy()
 The test with the simulated robot stays in Filtering.ipynb.
 """
+
+
+# This is a test 
+
+
 #Importation 
 import math
 import numpy as np
