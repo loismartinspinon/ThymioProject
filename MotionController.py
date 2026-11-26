@@ -26,14 +26,14 @@ from Filtering import wrap_to_pi   # angle brought back into ]-pi, pi] (replaces
 # Parameters to calibrate
 # =============================================================================
 
-speed_turn = 70
-speed_forward = 150
+speed_turn = 100
+speed_forward = 220
 omega = 0.628                # rad/s at speed_turn
 v_forward = 4.833            # cm/s at speed_forward
 min_angle = np.radians(1)    # below this angle, the robot does not turn
 min_distance = 0.5           # below this distance (cm), the point is ignored
 
-k_rho, k_alpha, k_beta = 1.0, 3.0, 0.0
+k_rho, k_alpha, k_beta = 1.3, 1.35, 0.0
 assert k_rho > 0 and k_beta <= 0 and k_alpha - k_rho > 0
 
 v_max = 4.0

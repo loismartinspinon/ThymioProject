@@ -25,9 +25,10 @@ import heapq
 # =============================================================================
 
 # Size of the rectified map in pixels
-# Arena 100 x 56.25 cm (16:9, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
-MAP_WIDTH = 256
-MAP_HEIGHT = 144
+# Arena 100 x 84.375 cm (3 x 3 A3 tiles, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
+# (previous arena: 100 x 56.25 cm, 16:9 -> 256 x 144)
+MAP_WIDTH = 128
+MAP_HEIGHT = 108
 
 # HSV color ranges
 LOWER_RED1, UPPER_RED1 = np.array([0, 100, 100]), np.array([10, 255, 255])
@@ -40,7 +41,7 @@ GREY_THRESHOLD = 60        # threshold defining an obstacle color. if below this
 MIN_OBSTACLE_AREA = 40     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
 
 # Thymio's half-size in pixels: half-width 5.5 cm + 0.5 cm margin = 6 cm -> 6 * 2.56 = 15 px. Jonas : J'ai augmenté un peux (ancienne valeurs : 15)
-ROBOT_RADIUS_PX = 20
+ROBOT_RADIUS_PX = 10
 
 nest_position = []
 
@@ -255,6 +256,25 @@ def a_star(grid, start, goal):
     return None
 
 
+# Computes the A* path from the Thymio's position (x, y in map pixels) to the goal (row, col).
+# Called from main.ipynb only at the start and after each local navigation, not at every frame.
+# Returns a list of (x, y) points in map pixels, None if no path found
+def plan_path(grid, x, y, goal):
+    grid = grid.copy()
+    start = (int(round(y)), int(round(x)))
+
+    # Frees the safety margin around the robot and the goal: after an obstacle avoidance,
+    # the robot stands inside the inflated margin of the obstacle and A* would find no path
+    yy, xx = np.ogrid[:MAP_HEIGHT, :MAP_WIDTH]
+    for r, c in (start, goal):
+        grid[(yy - r) ** 2 + (xx - c) ** 2 <= ROBOT_RADIUS_PX ** 2] = False
+
+    path = a_star(grid, start, goal)
+    if path is None:
+        return None
+    return [(c, r) for r, c in path]     # (row, col) -> (x, y)
+
+
 # Method used to fetch the actual position and its angle, the final position and the predicted path
 def fetch_status_cv(image):
     # Condition for fetching the status data: needs a video frame
@@ -286,16 +306,10 @@ def fetch_status_cv(image):
     # Generation of occupancy grid to know where the obstacles stand
     color_mask = cv2.bitwise_or(cv2.bitwise_or(mask_red, mask_green), mask_blue)
     obstacle_mask = obstacle_map(rectified_image, color_mask, markers, H)
+    # Forbidden zone = obstacles + margin + borders. Also displayed in orange by the GUI ("margin")
     occupancy_grid = occupancy_grid_from(obstacle_mask)
-    margin = occupancy_grid.copy()      # forbidden zone = obstacles + margin + borders (for the GUI)
 
-    # A* path computation
-    start = (int(round(y)), int(round(x)))
+    # Goal cell (row, col). The path itself is computed by plan_path(), called from main.ipynb only when needed
     goal = (blue_position[1], blue_position[0])
 
-    occupancy_grid[start] = False
-    occupancy_grid[goal] = False
-
-    path = a_star(occupancy_grid, start, goal)
-
-    return [x, y, theta, path, obstacle_positions(obstacle_mask), margin]
+    return [x, y, theta, occupancy_grid, goal, obstacle_positions(obstacle_mask)]

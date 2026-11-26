@@ -27,8 +27,8 @@ import heapq
 # Size of the rectified map in pixels
 # Arena 100 x 84.375 cm (3 x 3 A3 tiles, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
 # (previous arena: 100 x 56.25 cm, 16:9 -> 256 x 144)
-MAP_WIDTH = 256
-MAP_HEIGHT = 216
+MAP_WIDTH = 128
+MAP_HEIGHT = 108
 
 # HSV color ranges
 LOWER_RED1, UPPER_RED1 = np.array([0, 100, 100]), np.array([10, 255, 255])
@@ -41,7 +41,7 @@ GREY_THRESHOLD = 60        # threshold defining an obstacle color. if below this
 MIN_OBSTACLE_AREA = 40     # blobs smaller than this are noise, used to avoid considering Thymio's wheels as obstacles due to their color
 
 # Thymio's half-size in pixels: half-width 5.5 cm + 0.5 cm margin = 6 cm -> 6 * 2.56 = 15 px. Jonas : J'ai augmenté un peux (ancienne valeurs : 15)
-ROBOT_RADIUS_PX = 20
+ROBOT_RADIUS_PX = 10
 
 nest_position = []
 
