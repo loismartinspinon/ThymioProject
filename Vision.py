@@ -25,9 +25,10 @@ import heapq
 # =============================================================================
 
 # Size of the rectified map in pixels
-# Arena 100 x 56.25 cm (16:9, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
+# Arena 100 x 84.375 cm (3 x 3 A3 tiles, outer corners of the ArUco markers) -> 2.56 px/cm on both axes
+# (previous arena: 100 x 56.25 cm, 16:9 -> 256 x 144)
 MAP_WIDTH = 256
-MAP_HEIGHT = 144
+MAP_HEIGHT = 216
 
 # HSV color ranges
 LOWER_RED1, UPPER_RED1 = np.array([0, 100, 100]), np.array([10, 255, 255])

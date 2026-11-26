@@ -3,10 +3,10 @@ Generates the printable documents for the Thymio experimental arena
 (EPFL - Basics of Mobile Robotics).
 
 Outputs (written next to this script):
-    arena_technical_drawing.pdf   A3 landscape, 3 sheets: dimensioned top view (1:4),
-                                  coordinate tables, navigation analysis
-    arena_full_scale_1to1.pdf     single 1040 x 602.5 mm page (arena + 20 mm margin), 1:1
-    arena_tiled_A3_1to1.pdf       same arena split on 6 A3 sheets (3 x 2), 1:1
+    arena_technical_drawing.pdf   A3 landscape, 3 sheets: dimensioned top view (1:5),
+                                  coordinate tables, navigation analysis (1:6)
+    arena_full_scale_1to1.pdf     single 1040 x 883.75 mm page (arena + 20 mm margin), 1:1
+    arena_tiled_A3_1to1.pdf       same arena split on 9 A3 sheets (3 x 3), 1:1
     obstacles_sheet_A3.pdf        the two 6 x 6 cm obstacles, 1:1
     aruco_markers_A3.pdf          the four 5 x 5 cm ArUco markers (IDs 0-3), 1:1
     arena_complete.pdf            all of the above in one PDF
@@ -36,7 +36,12 @@ from reportlab.lib.utils import simpleSplit
 # =============================================================================
 
 ARENA_W = 100.0
-ARENA_H = 56.25
+# 3 rows of A3 tiles (28.125 cm each). The third row was added on top of the original
+# 100 x 56.25 cm (16:9) arena to get free space for random objects: the origin, the
+# obstacles and the bottom markers did not move, only the top markers moved up.
+PREVIOUS_ARENA_H = 56.25
+ARENA_H = 84.375
+TILES = (3, 3)                             # columns x rows of A3 landscape tiles (1:1 tiled print)
 
 MARKER_SIZE = 5.0                          # ArUco side, black border included
 ARUCO_DICT_NAME = "DICT_4X4_50"
@@ -47,8 +52,8 @@ MARKERS = [
     # id, corner name, centre (x, y)
     (0, "bottom-left (origin)", (2.5, 2.5)),
     (1, "bottom-right", (97.5, 2.5)),
-    (2, "top-right", (97.5, 53.75)),
-    (3, "top-left", (2.5, 53.75)),
+    (2, "top-right", (97.5, ARENA_H - MARKER_SIZE / 2)),
+    (3, "top-left", (2.5, ARENA_H - MARKER_SIZE / 2)),
 ]
 
 OBSTACLE_SIZE = 6.0
@@ -67,18 +72,30 @@ START = (11.0, 11.0)                       # suggested start (not printed on the
 GOAL = (88.0, 48.0)                        # suggested goal  (not printed on the arena)
 LOCAL_ZONE = (63.0, 22.0, 85.0, 42.0)      # x0, y0, x1, y1: free area for a hand-placed obstacle
 
-RECT_PX_PER_CM = 19.2                      # 1920 px / 100 cm (rectified 1920 x 1080 map)
+RECT_PX_PER_CM = 19.2                      # 1920 px / 100 cm (rectified 1920 x 1620 map)
+RECT_W = round(ARENA_W * RECT_PX_PER_CM)   # 1920
+RECT_H = round(ARENA_H * RECT_PX_PER_CM)   # 1620
+VISION_MAP = (256, 216)                    # MAP_WIDTH x MAP_HEIGHT in Vision.py (2.56 px/cm)
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Paper. The technical drawing is laid out in A4-landscape units and scaled up
-# by K so that it fills an A3 sheet; its arena drawing is at 1:4 on the paper.
+# by K so that it fills an A3 sheet. The top view is at 1:5 and the navigation
+# sheet at 1:6 on the paper (the taller arena no longer fits at 1:4).
 PAPER = A3
 PAPER_NAME = "A3"
 K = PAPER[0] / A4[0]                       # A3 / A4 = sqrt(2)
-DRAW_SCALE = 4                             # 1:4 on A3
-DRAW_MM_PER_CM = 10.0 / DRAW_SCALE / K     # in A4 layout units
-SCALE_TEXT = f"1:{DRAW_SCALE} on {PAPER_NAME}"
+TOP_VIEW_SCALE = 5                         # 1:5 on A3
+NAV_SCALE = 6                              # 1:6 on A3
+
+
+def draw_mm_per_cm(scale):
+    """Arena cm -> mm in A4 layout units, for a 1:scale drawing on the paper."""
+    return 10.0 / scale / K
+
+
+def scale_text(scale):
+    return f"1:{scale} on {PAPER_NAME}"
 
 GREY_LIGHT = Color(0.86, 0.86, 0.86)
 GREY_MID = Color(0.55, 0.55, 0.55)
@@ -222,6 +239,24 @@ def fmt(v):
     return f"{v:g}"
 
 
+def draw_previous_edge(c, f, x1=ARENA_W - MARKER_SIZE, label_below=True):
+    """Dashed line at the top edge of the original 56.25 cm arena + label of the added row."""
+    c.saveState()
+    c.setStrokeColor(GREY_MID)
+    c.setLineWidth(0.4)
+    c.setDash([3, 2])
+    c.line(f.x(MARKER_SIZE), f.y(PREVIOUS_ARENA_H), f.x(x1), f.y(PREVIOUS_ARENA_H))
+    c.restoreState()
+    c.setFillColor(GREY_DARK)
+    c.setFont("Helvetica-Oblique", 6.3)
+    xm = f.x((MARKER_SIZE + x1) / 2)
+    c.drawCentredString(xm, f.y(PREVIOUS_ARENA_H) + 1.5 * mm,
+                        f"added row (y {fmt(PREVIOUS_ARENA_H)} - {fmt(ARENA_H)}): free space for random objects")
+    if label_below:
+        c.drawCentredString(xm, f.y(PREVIOUS_ARENA_H) - 3.5 * mm,
+                            f"previous top edge, y = {fmt(PREVIOUS_ARENA_H)} (not printed)")
+
+
 def segment_clearance(a, b, centre, samples=4000):
     """Smallest distance (cm) between segment a-b and the rounded obstacle at centre (0 = crosses it)."""
     inner = OBSTACLE_SIZE / 2 - OBSTACLE_RADIUS
@@ -273,7 +308,7 @@ def title_block(c, W, H, sheet, n_sheets, title, scale_text):
     c.drawString(cols[4] + 2 * mm, y0 + 11 * mm, "ARENA / CAMERA")
     c.setFont("Helvetica", 6.8)
     c.setFillColor(black)
-    c.drawString(cols[4] + 2 * mm, y0 + 6.5 * mm, "100 x 56.25 cm, white matte, 4 ArUco + 2 obstacles")
+    c.drawString(cols[4] + 2 * mm, y0 + 6.5 * mm, f"{fmt(ARENA_W)} x {fmt(ARENA_H)} cm, white matte, 4 ArUco + 2 obstacles")
     c.drawString(cols[4] + 2 * mm, y0 + 2.8 * mm, "Aukey 1080p webcam, 1920 x 1080 px, vertical, above")
 
 
@@ -305,8 +340,8 @@ def table(c, x, y, col_w, rows, size=7.5, row_h=5.2 * mm, header=True):
 def sheet_top_view(c):
     W, H = landscape(A4)            # layout units, scaled by K onto the A3 page
     c.scale(K, K)
-    f = Frame(52, 62, DRAW_MM_PER_CM)   # 1:4 on A3 -> 1 cm of arena = 2.5 mm on paper
-    title_block(c, W, H, 1, 3, "Thymio experimental arena - dimensioned top view", SCALE_TEXT)
+    f = Frame(52, 54, draw_mm_per_cm(TOP_VIEW_SCALE))   # 1:5 on A3 -> 1 cm of arena = 2 mm on paper
+    title_block(c, W, H, 1, 3, "Thymio experimental arena - dimensioned top view", scale_text(TOP_VIEW_SCALE))
 
     c.setFont("Helvetica-Bold", 12)
     c.setFillColor(black)
@@ -321,8 +356,11 @@ def sheet_top_view(c):
     c.setLineWidth(0.25)
     for gx in range(10, 100, 10):
         c.line(f.x(gx), f.y(0), f.x(gx), f.y(ARENA_H))
-    for gy in range(10, 56, 10):
+    for gy in range(10, math.ceil(ARENA_H), 10):
         c.line(f.x(0), f.y(gy), f.x(ARENA_W), f.y(gy))
+
+    # previous top edge: the row above it was added as free space
+    draw_previous_edge(c, f)
 
     # arena content
     for mid, _, centre in MARKERS:
@@ -351,8 +389,8 @@ def sheet_top_view(c):
     c.setFont("Helvetica-Bold", 6.5)
     c.drawString(f.x(6), f.y(1.2), "ID 0")
     c.drawRightString(f.x(94), f.y(1.2), "ID 1")
-    c.drawRightString(f.x(94), f.y(54.0), "ID 2")
-    c.drawString(f.x(6), f.y(54.0), "ID 3")
+    c.drawRightString(f.x(94), f.y(ARENA_H - 2.25), "ID 2")
+    c.drawString(f.x(6), f.y(ARENA_H - 2.25), "ID 3")
 
     # centre lines through the obstacles, extended to the dimension lines
     (n1, (x1c, y1c)), (n2, (x2c, y2c)) = OBSTACLES
@@ -455,7 +493,7 @@ def sheet_coordinates(c):
     c.setFont("Helvetica-Bold", 9)
     c.drawString(x, y, "Obstacles (black matte, 6 x 6 cm rounded square, corner radius 1 cm)")
     y -= 2 * mm
-    rows = [["Obstacle", "Centre x", "Centre y", "x range", "y range", "Size", "Centre in 1920x1080 map (px)"]]
+    rows = [["Obstacle", "Centre x", "Centre y", "x range", "y range", "Size", f"Centre in {RECT_W}x{RECT_H} map (px)"]]
     for name, (cx, cy) in OBSTACLES:
         x0, x1, y0, y1 = obstacle_box((cx, cy))
         px = cx * RECT_PX_PER_CM
@@ -471,8 +509,8 @@ def sheet_coordinates(c):
     rows = [["ID", "Corner", "Centre x", "Centre y", "x range", "y range", "Arena corner = outer marker corner"]]
     for mid, name, (cx, cy) in MARKERS:
         h = MARKER_SIZE / 2
-        corner = (0 if cx < 50 else ARENA_W, 0 if cy < 28 else ARENA_H)
-        rows.append([str(mid), name, f"{cx:.2f}", f"{cy:.2f}", f"{fmt(cx - h)} - {fmt(cx + h)}",
+        corner = (0 if cx < ARENA_W / 2 else ARENA_W, 0 if cy < ARENA_H / 2 else ARENA_H)
+        rows.append([str(mid), name, f"{cx:.2f}", f"{cy:.3f}", f"{fmt(cx - h)} - {fmt(cx + h)}",
                      f"{fmt(cy - h)} - {fmt(cy + h)}", f"({fmt(corner[0])}, {fmt(corner[1])})"])
     y = table(c, x, y, [12 * mm, 38 * mm, 20 * mm, 20 * mm, 25 * mm, 27 * mm, 52 * mm], rows)
 
@@ -492,7 +530,7 @@ def sheet_coordinates(c):
         ["O1 - left edge", f"{o1[0]:g}", f"{o1[0] - THYMIO_W:g}", "comfortable (2 robot widths)"],
         ["O1 - top edge  /  O2 - bottom edge", f"{ARENA_H - o1[3]:g} / {o2[2]:g}", f"{o2[2] - THYMIO_W:g}", "wide"],
         ["O1 - bottom edge", f"{o1[2]:g}", f"{o1[2] - THYMIO_W:g}", "narrow, usually closed after inflation"],
-        ["O2 - top edge", f"{ARENA_H - o2[3]:g}", f"{ARENA_H - o2[3] - THYMIO_W:g}", "narrow, usually closed after inflation"],
+        ["O2 - top edge", f"{ARENA_H - o2[3]:g}", f"{ARENA_H - o2[3] - THYMIO_W:g}", "very wide since the added row"],
     ]
     y = table(c, x, y, [62 * mm, 30 * mm, 40 * mm, 62 * mm], rows)
 
@@ -503,13 +541,19 @@ def sheet_coordinates(c):
     c.drawString(rx, ry, "Conversions")
     ry -= 5 * mm
     notes = [
-        "Rectified map with the four outer marker corners mapped to the image corners: "
-        "the arena is 16:9, like the 1920 x 1080 sensor.",
-        "px = x * W / 100",
-        "py = (56.25 - y) * H / 56.25",
+        "Rectified map with the four outer marker corners mapped to the image corners. "
+        f"The arena is {fmt(ARENA_W)} x {fmt(ARENA_H)} cm (ratio {ARENA_W / ARENA_H:.3f}), no longer 16:9: "
+        "the map must keep this ratio so that px/cm is the same on both axes.",
+        f"px = x * W / {fmt(ARENA_W)}",
+        f"py = ({fmt(ARENA_H)} - y) * H / {fmt(ARENA_H)}",
         "(image y axis points down)",
-        "For W x H = 1920 x 1080: 19.2 px/cm. Obstacle = 115 px, marker = 96 px, marker cell = 16 px.",
-        "Arena centre: (50, 28.125).",
+        f"For W x H = {RECT_W} x {RECT_H}: {RECT_PX_PER_CM:g} px/cm. Obstacle = 115 px, marker = 96 px, "
+        "marker cell = 16 px.",
+        f"Vision.py map: {VISION_MAP[0]} x {VISION_MAP[1]} px, {VISION_MAP[0] / ARENA_W:g} px/cm.",
+        f"Arena centre: ({fmt(ARENA_W / 2)}, {fmt(ARENA_H / 2)}).",
+        f"Top row (y {fmt(PREVIOUS_ARENA_H)} - {fmt(ARENA_H)}) added above the original "
+        f"{fmt(ARENA_W)} x {fmt(PREVIOUS_ARENA_H)} cm arena: obstacles and bottom markers unchanged, "
+        "top markers moved up.",
         "O1 and O2 are shifted 10 cm to the left of the previous layout (35, 17) / (65, 39): "
         f"the band between O2 and the right edge is {ARENA_W - o2[1]:g} cm wide.",
     ]
@@ -522,16 +566,17 @@ def sheet_coordinates(c):
     c.setFont("Helvetica-Bold", 9)
     c.drawString(x, y, "Printing and assembly")
     y -= 5 * mm
+    full_w, full_h = ARENA_W * 10 + 2 * MARGIN_MM, ARENA_H * 10 + 2 * MARGIN_MM
     steps = [
-        "1. Plotter: print arena_full_scale_1to1.pdf (1040 x 602.5 mm) at 100 % on white matte paper. "
+        f"1. Plotter: print arena_full_scale_1to1.pdf ({fmt(full_w)} x {fmt(full_h)} mm) at 100 % on white matte paper. "
         "Do not trim the 2 cm white margin (ArUco quiet zone). Check the 100 mm scale bar.",
-        "2. No plotter: print arena_tiled_A3_1to1.pdf (6 x A3, 100 %), trim only joining edges, butt-join and tape on "
-        "the back. No tile seam crosses an obstacle or a marker.",
-        "3. Alternative: on any white matte 100 x 56.25 cm surface, place the 4 cut markers of aruco_markers_A3.pdf "
+        f"2. No plotter: print arena_tiled_A3_1to1.pdf ({TILES[0] * TILES[1]} x A3, 100 %), trim only joining edges, "
+        "butt-join and tape on the back. No tile seam crosses an obstacle or a marker.",
+        f"3. Alternative: on any white matte {fmt(ARENA_W)} x {fmt(ARENA_H)} cm surface, place the 4 cut markers of aruco_markers_A3.pdf "
         "(outer corner on the arena corner, 'top' arrow towards +y) and the 2 obstacles of obstacles_sheet_A3.pdf "
         "at the coordinates above.",
         "4. Mount the camera so the four markers are fully visible with some white around them; no other dark objects "
-        "inside the arena.",
+        f"inside the arena. The arena is now {fmt(ARENA_H)} cm deep: the camera may have to be mounted higher.",
     ]
     for s_ in steps:
         y = wrap_text(c, s_, x, y, 194 * mm, size=7.4, leading=9.2) - 1.2 * mm
@@ -540,12 +585,12 @@ def sheet_coordinates(c):
 def sheet_navigation(c):
     W, H = landscape(A4)
     c.scale(K, K)
-    title_block(c, W, H, 3, 3, "Thymio experimental arena - navigation analysis", SCALE_TEXT)
+    title_block(c, W, H, 3, 3, "Thymio experimental arena - navigation analysis", scale_text(NAV_SCALE))
     c.setFillColor(black)
     c.setFont("Helvetica-Bold", 12)
     c.drawString(14 * mm, H - 13 * mm, "LAYOUT RATIONALE - navigation analysis")
 
-    f = Frame(24, 84, DRAW_MM_PER_CM)
+    f = Frame(24, 84, draw_mm_per_cm(NAV_SCALE))
 
     # arena
     c.setStrokeColor(black)
@@ -577,6 +622,8 @@ def sheet_navigation(c):
     hw = THYMIO_W / 2
     c.rect(f.x(hw), f.y(hw), f.len(ARENA_W - 2 * hw), f.len(ARENA_H - 2 * hw), stroke=1, fill=0)
     c.setDash([])
+
+    draw_previous_edge(c, f, x1=GOAL[0] - 10, label_below=False)   # stops before the G label
 
     def polyline(points, color, width, dash=None):
         c.saveState()
@@ -649,7 +696,8 @@ def sheet_navigation(c):
     mx, my = (o1[0] + o2[0]) / 2, (o1[1] + o2[1]) / 2
     c.drawString(f.x(mx - 3.5), f.y(my - 7.5), f"{gap_diag:.1f} cm")
     c.drawString(f.x(o1[0] + 4), f.y(4.5), f"{b1[2]:g} cm")
-    c.drawString(f.x(o2[0] - 7), f.y(51.8), f"{ARENA_H - b2[3]:g} cm")
+    c.drawCentredString(f.x(o2[0]), f.y((PREVIOUS_ARENA_H + ARENA_H) / 2 + 4),
+                        f"{ARENA_H - b2[3]:g} cm from O2 to top edge")
     c.drawCentredString(f.x((b2[1] + ARENA_W) / 2), f.y(LOCAL_ZONE[1]) - 5 * mm,
                         f"{ARENA_W - b2[1]:g} cm free right of O2")
 
@@ -703,11 +751,13 @@ def sheet_navigation(c):
          f"{gap_diag / THYMIO_W:.1f} Thymio widths); O1 is {b1[0]:g} cm from the left edge (2 robot widths). "
          "Both obstacles are convex and separated: no pocket or dead end where the robot could get trapped."),
         ("Several routes.", "Besides the central route, the robot can go around O1 from below or O2 from above. "
-         f"These edge passages are {b1[2]:g} / {ARENA_H - b2[3]:g} cm, only about 3 cm wider than the robot, so "
-         "with an inflation of about 6 cm the planner usually rejects them; they remain fall-back routes."),
+         f"Below O1 the passage is only {b1[2]:g} cm, about 3 cm wider than the robot, so with an inflation of "
+         f"about 6 cm the planner usually rejects it. Above O2 the added row leaves {ARENA_H - b2[3]:g} cm: "
+         "a wide route and room for random objects."),
         ("Vision.", "Black matte obstacles on white matte paper give maximum contrast for thresholding. "
          "The outer marker corners coincide with the arena corners, so the homography maps the arena "
-         "exactly onto a 16:9 image matching the 1920 x 1080 camera."),
+         f"exactly onto a {fmt(ARENA_W)} x {fmt(ARENA_H)} image ({VISION_MAP[0]} x {VISION_MAP[1]} px in "
+         "Vision.py). It is no longer 16:9: the camera must see all four markers."),
     ]
     gap = 7 * mm
     col_w = (W - 28 * mm - 2 * gap) / 3
@@ -783,14 +833,16 @@ def build_full_scale(c=None):
     path = os.path.join(OUT_DIR, "arena_full_scale_1to1.pdf")
     W = (ARENA_W * 10 + 2 * MARGIN_MM) * mm
     H = (ARENA_H * 10 + 2 * MARGIN_MM) * mm
-    c, own = open_canvas(c, path, (W, H), "Thymio arena 1:1 (1000 x 562.5 mm)")
+    aw, ah = ARENA_W * 10, ARENA_H * 10
+    c, own = open_canvas(c, path, (W, H), f"Thymio arena 1:1 ({fmt(aw)} x {fmt(ah)} mm)")
     f = Frame(MARGIN_MM, MARGIN_MM, 10.0)
     draw_arena_content(c, f)
     crop_marks(c, f.x(0), f.y(0), f.x(ARENA_W), f.y(ARENA_H))
     c.setFont("Helvetica", 6.5)
     c.setFillColor(GREY_DARK)
     c.drawString(f.x(5), H - 8 * mm,
-                 "Thymio arena - 1:1 - arena 1000 x 562.5 mm, sheet 1040 x 602.5 mm - print at 100 % "
+                 f"Thymio arena - 1:1 - arena {fmt(aw)} x {fmt(ah)} mm, sheet {fmt(aw + 2 * MARGIN_MM)} x "
+                 f"{fmt(ah + 2 * MARGIN_MM)} mm - print at 100 % "
                  "(actual size, no fit-to-page) on white matte paper. Keep the white margin: it is the "
                  "quiet zone the ArUco detector needs.")
     scale_bar(c, f.x(10), 8 * mm)
@@ -802,10 +854,10 @@ def build_full_scale(c=None):
 
 
 def build_tiled(c=None):
-    """1:1 arena on 3 x 2 A3 landscape sheets, each tile 333.3 x 281.25 mm."""
+    """1:1 arena on 3 x 3 A3 landscape sheets, each tile 333.3 x 281.25 mm."""
     path = os.path.join(OUT_DIR, f"arena_tiled_{PAPER_NAME}_1to1.pdf")
     PW, PH = landscape(PAPER)
-    ncol, nrow = 3, 2
+    ncol, nrow = TILES
     tw, th = ARENA_W * 10 / ncol, ARENA_H * 10 / nrow   # tile size, mm
     ox = (PW / mm - tw) / 2
     oy = (PH / mm - th) / 2
@@ -941,7 +993,7 @@ def build_marker_sheet(c=None):
         c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(X, Y - rim / 2 - 6 * mm, f"ID {mid} - {name}")
         c.setFont("Helvetica", 8)
-        corner = (0 if ax < 50 else ARENA_W, 0 if ay < 28 else ARENA_H)
+        corner = (0 if ax < ARENA_W / 2 else ARENA_W, 0 if ay < ARENA_H / 2 else ARENA_H)
         c.drawCentredString(X, Y - rim / 2 - 10.5 * mm,
                             f"centre ({fmt(ax)}, {fmt(ay)}) cm - outer corner at ({fmt(corner[0])}, {fmt(corner[1])})")
 
