@@ -1,12 +1,12 @@
 import math
 import time
 
-SPEED = 100
-TURN_SPEED = 120
-FRONT_THR = 1000          # obstacle too close ahead -> enter local nav (to tune)
-FRONT_CLEAR = 300         # front considered clear below this
+SPEED = 150
+TURN_SPEED = 300
+FRONT_THR = 1500          # obstacle too close ahead -> enter local nav (to tune)
+FRONT_CLEAR = 200         # front considered clear below this
 SIDE_SEEN = 300           # side sensor sees the object above this
-SIDE_TARGET = 1200        # side sensor value to keep while following (to tune)
+SIDE_TARGET = 800        # side sensor value to keep while following (to tune)
 FOLLOW_GAIN = 0.1         # to tune
 MAX_ERR = 400
 ALPHA_TOL = math.radians(15)   # "same angle": exit when |alpha| is below this
