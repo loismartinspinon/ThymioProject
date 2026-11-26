@@ -306,8 +306,18 @@ def fetch_status_cv(image):
     color_mask = cv2.bitwise_or(cv2.bitwise_or(mask_red, mask_green), mask_blue)
     obstacle_mask = obstacle_map(rectified_image, color_mask, markers, H)
     occupancy_grid = occupancy_grid_from(obstacle_mask)
+    margin = occupancy_grid.copy()      # forbidden zone = obstacles + margin + borders (for the GUI)
 
     # Goal cell (row, col). The path itself is computed by plan_path(), called from main.ipynb only when needed
     goal = (blue_position[1], blue_position[0])
 
+<<<<<<< HEAD
     return [x, y, theta, occupancy_grid, goal, obstacle_positions(obstacle_mask)]
+=======
+    occupancy_grid[start] = False
+    occupancy_grid[goal] = False
+
+    path = a_star(occupancy_grid, start, goal)
+
+    return [x, y, theta, path, obstacle_positions(obstacle_mask), margin]
+>>>>>>> 3037e70625d3466f70107002eb9c0e1d071c1fd9

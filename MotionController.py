@@ -39,7 +39,7 @@ assert k_rho > 0 and k_beta <= 0 and k_alpha - k_rho > 0
 v_max = 4.0
 w_max = 0.7
 motor_max = 255
-l = 11.7 / 2
+l = 11.1 / 2
 speed_factor = speed_forward / v_forward
 dt = 0.05
 
