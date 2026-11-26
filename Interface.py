@@ -21,7 +21,7 @@ import time
 import numpy as np
 import cv2
 
-from Vision import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv
+from Vision import MAP_WIDTH, MAP_HEIGHT, rectify_image, fetch_status_cv, plan_path
 
 
 # =============================================================================
@@ -121,8 +121,9 @@ def calibrate_camera(cap):
 # Elements measures:
 #    Thymio's position: (x,y) in map pixels. Defined as None if fetch_status_cv() failed.
 #    theta: angle of the Thymio in radians (MORE DESCRIPTION NEEDED)
-#    path: defined path with A* method, defined as a list of (x,y) points, None if no path found
-#    next: next position to be aimed, considered as the 1st element of the path array
+#    path: path followed by the robot (A* computed in main.ipynb with plan_path()), list of (x,y) points, None if no path
+#    next: unused (None)
+#    grid, goal: occupancy grid and goal cell (row, col), used by plan_path() in main.ipynb
 #    error: ValueError message given by fetch_status_cv()
 #    obstacles: detected obstacles, list of (cx, cy, x, y, w, h) in map pixels (centre + bounding box)
 #    kalman, nav (optional, set by main.ipynb): camera share in the Kalman correction, "Global" / "Local" navigation
@@ -130,16 +131,14 @@ def calibrate_camera(cap):
 
 def take_snapshot(frame):
     try:
-        x, y, theta, path, obstacles = fetch_status_cv(frame)
+        x, y, theta, grid, goal, obstacles = fetch_status_cv(frame)
     except ValueError as e:
-        return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e), "obstacles": None}
+        return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e),
+                "obstacles": None, "grid": None, "goal": None}
 
-    next_position = None
-    if path is not None:
-        path = [(col, row) for row, col in path]    # (row, col) cells -> (x, y) points
-        next_position = path[1] if len(path) > 1 else path[0]
-
-    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position, "error": None, "obstacles": obstacles}
+    # "path" is filled by main.ipynb with the path being followed (A* is no longer computed at every frame)
+    return {"thymio": (x, y), "theta": theta, "path": None, "next": None, "error": None,
+            "obstacles": obstacles, "grid": grid, "goal": goal}
     
 # =============================================================================
 # Data display
@@ -299,6 +298,8 @@ def run_interface():
                             state["thymio"], state["theta"] = last_pose[:2], last_pose[2]
                         elif not stale:
                             last_pose = (*state["thymio"], state["theta"])
+                            # standalone test: A* recomputed at every snapshot to display it
+                            state["path"] = plan_path(state["grid"], *state["thymio"], state["goal"])
                         rectified = cv2.warpPerspective(frame, H, (MAP_WIDTH, MAP_HEIGHT))
                         cv2.imshow(WINDOW_MAP, draw_map(rectified, state, stale))
 

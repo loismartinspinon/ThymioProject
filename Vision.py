@@ -255,6 +255,25 @@ def a_star(grid, start, goal):
     return None
 
 
+# Computes the A* path from the Thymio's position (x, y in map pixels) to the goal (row, col).
+# Called from main.ipynb only at the start and after each local navigation, not at every frame.
+# Returns a list of (x, y) points in map pixels, None if no path found
+def plan_path(grid, x, y, goal):
+    grid = grid.copy()
+    start = (int(round(y)), int(round(x)))
+
+    # Frees the safety margin around the robot and the goal: after an obstacle avoidance,
+    # the robot stands inside the inflated margin of the obstacle and A* would find no path
+    yy, xx = np.ogrid[:MAP_HEIGHT, :MAP_WIDTH]
+    for r, c in (start, goal):
+        grid[(yy - r) ** 2 + (xx - c) ** 2 <= ROBOT_RADIUS_PX ** 2] = False
+
+    path = a_star(grid, start, goal)
+    if path is None:
+        return None
+    return [(c, r) for r, c in path]     # (row, col) -> (x, y)
+
+
 # Method used to fetch the actual position and its angle, the final position and the predicted path
 def fetch_status_cv(image):
     # Condition for fetching the status data: needs a video frame
@@ -288,21 +307,7 @@ def fetch_status_cv(image):
     obstacle_mask = obstacle_map(rectified_image, color_mask, markers, H)
     occupancy_grid = occupancy_grid_from(obstacle_mask)
 
-    # A* path computation
-    start = (int(round(y)), int(round(x)))
+    # Goal cell (row, col). The path itself is computed by plan_path(), called from main.ipynb only when needed
     goal = (blue_position[1], blue_position[0])
 
-    occupancy_grid[start] = False
-    occupancy_grid[goal] = False
-
-    path = a_star(occupancy_grid, start, goal)
-
-    # Case where no planned path is defined
-    if path is None:
-        next_position = None
-    else:
-        # Defines the entire list of points for the planned path
-        row, col = path[1] if len(path) > 1 else path[0]
-        next_position = (col, row)   # (row, col) -> (x, y)
-
-    return [x, y, theta, path, obstacle_positions(obstacle_mask)]
+    return [x, y, theta, occupancy_grid, goal, obstacle_positions(obstacle_mask)]
