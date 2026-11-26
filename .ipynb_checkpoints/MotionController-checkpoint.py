@@ -26,7 +26,7 @@ from Filtering import wrap_to_pi   # angle brought back into ]-pi, pi] (replaces
 # Parameters to calibrate
 # =============================================================================
 
-speed_turn = 100
+speed_turn = 70
 speed_forward = 150
 omega = 0.628                # rad/s at speed_turn
 v_forward = 4.833            # cm/s at speed_forward
@@ -39,7 +39,7 @@ assert k_rho > 0 and k_beta <= 0 and k_alpha - k_rho > 0
 v_max = 4.0
 w_max = 0.7
 motor_max = 255
-l = 11.7 / 2
+l = 11.1 / 2
 speed_factor = speed_forward / v_forward
 dt = 0.05
 

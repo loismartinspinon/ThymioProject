@@ -130,16 +130,18 @@ def calibrate_camera(cap):
 
 def take_snapshot(frame):
     try:
-        x, y, theta, path, obstacles = fetch_status_cv(frame)
+        x, y, theta, path, obstacles, margin = fetch_status_cv(frame)
     except ValueError as e:
-        return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e), "obstacles": None}
+        return {"thymio": None, "theta": None, "path": None, "next": None,
+                "error": str(e), "obstacles": None, "margin": None}
 
     next_position = None
     if path is not None:
-        path = [(col, row) for row, col in path]    # (row, col) cells -> (x, y) points
+        path = [(col, row) for row, col in path]
         next_position = path[1] if len(path) > 1 else path[0]
 
-    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position, "error": None, "obstacles": obstacles}
+    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position,
+            "error": None, "obstacles": obstacles, "margin": margin}
     
 # =============================================================================
 # Data display
@@ -197,7 +199,13 @@ def draw_camera(frame, state, H_inv, stale):
     # Calibrated area
     area = project_points(MAP_CORNERS, H_inv).astype(np.int32)
     cv2.polylines(frame, [area], True, (255, 255, 0), 2)
-
+    if state is not None and state.get("margin") is not None:
+        h, w = frame.shape[:2]
+        m = cv2.warpPerspective(state["margin"].astype(np.uint8) * 255, H_inv, (w, h),
+                                flags=cv2.INTER_NEAREST) > 0
+        overlay = frame.copy()
+        overlay[m] = (0, 165, 255)
+        frame = cv2.addWeighted(overlay, 0.35, frame, 0.65, 0)
     if state is None:
         return frame
 
@@ -220,7 +228,13 @@ def draw_camera(frame, state, H_inv, stale):
 def draw_map(rectified, state, stale):
     s = MAP_SCALE
     img = cv2.resize(rectified, (MAP_WIDTH * s, MAP_HEIGHT * s), interpolation=cv2.INTER_NEAREST)
-
+    margin = state.get("margin")
+    if margin is not None:
+        big = cv2.resize(margin.astype(np.uint8), (MAP_WIDTH * s, MAP_HEIGHT * s),
+                         interpolation=cv2.INTER_NEAREST).astype(bool)
+        overlay = img.copy()
+        overlay[big] = (0, 165, 255)                      # orange (BGR)
+        img = cv2.addWeighted(overlay, 0.35, img, 0.65, 0)
     def m(p):
         return (int(round(p[0] * s)), int(round(p[1] * s)))
 

@@ -287,6 +287,7 @@ def fetch_status_cv(image):
     color_mask = cv2.bitwise_or(cv2.bitwise_or(mask_red, mask_green), mask_blue)
     obstacle_mask = obstacle_map(rectified_image, color_mask, markers, H)
     occupancy_grid = occupancy_grid_from(obstacle_mask)
+    margin = occupancy_grid.copy()      # forbidden zone = obstacles + margin + borders (for the GUI)
 
     # A* path computation
     start = (int(round(y)), int(round(x)))
@@ -297,12 +298,4 @@ def fetch_status_cv(image):
 
     path = a_star(occupancy_grid, start, goal)
 
-    # Case where no planned path is defined
-    if path is None:
-        next_position = None
-    else:
-        # Defines the entire list of points for the planned path
-        row, col = path[1] if len(path) > 1 else path[0]
-        next_position = (col, row)   # (row, col) -> (x, y)
-
-    return [x, y, theta, path, obstacle_positions(obstacle_mask)]
+    return [x, y, theta, path, obstacle_positions(obstacle_mask), margin]
