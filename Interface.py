@@ -131,29 +131,15 @@ def calibrate_camera(cap):
 
 def take_snapshot(frame):
     try:
-<<<<<<< HEAD
         x, y, theta, grid, goal, obstacles = fetch_status_cv(frame)
     except ValueError as e:
         return {"thymio": None, "theta": None, "path": None, "next": None, "error": str(e),
-                "obstacles": None, "grid": None, "goal": None}
+                "obstacles": None, "grid": None, "goal": None, "margin": None}
 
     # "path" is filled by main.ipynb with the path being followed (A* is no longer computed at every frame)
+    # "margin" = forbidden zone (obstacles + margin + borders) displayed in orange: it is the occupancy grid itself
     return {"thymio": (x, y), "theta": theta, "path": None, "next": None, "error": None,
-            "obstacles": obstacles, "grid": grid, "goal": goal}
-=======
-        x, y, theta, path, obstacles, margin = fetch_status_cv(frame)
-    except ValueError as e:
-        return {"thymio": None, "theta": None, "path": None, "next": None,
-                "error": str(e), "obstacles": None, "margin": None}
-
-    next_position = None
-    if path is not None:
-        path = [(col, row) for row, col in path]
-        next_position = path[1] if len(path) > 1 else path[0]
-
-    return {"thymio": (x, y), "theta": theta, "path": path, "next": next_position,
-            "error": None, "obstacles": obstacles, "margin": margin}
->>>>>>> 3037e70625d3466f70107002eb9c0e1d071c1fd9
+            "obstacles": obstacles, "grid": grid, "goal": goal, "margin": grid}
     
 # =============================================================================
 # Data display
