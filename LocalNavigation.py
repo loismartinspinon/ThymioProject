@@ -1,59 +1,68 @@
-import math
 import time
 
-SPEED = 150
-TURN_SPEED = 300
-FRONT_THR = 1500          # obstacle too close ahead -> enter local nav (to tune)
-FRONT_CLEAR = 200         # front considered clear below this
-SIDE_SEEN = 300           # side sensor sees the object above this
-SIDE_TARGET = 800        # side sensor value to keep while following (to tune)
-FOLLOW_GAIN = 0.1         # to tune
-MAX_ERR = 400
-ALPHA_TOL = math.radians(15)   # "same angle": exit when |alpha| is below this
-TURN_TIMEOUT = 4.0
+TURN_SPEED = 150          # spin speed
+SPEED = 150               # forward speed
+SEE_THR = 1000            # a sensor above this = obstacle seen -> start turning
+CLEAR_THR = 300           # all sensors below this = nothing seen (lower than SEE_THR = hysteresis)
+FORWARD_TIME = 0.6        # s driven forward after the obstacle is no longer seen
+TURN_TIMEOUT = 4.0        # s, safety: give control back if the robot spins for too long
+
 
 def new_local_nav_memory():
     return {"state": "OFF", "side": None, "t_state": 0.0}
 
+
+def reset(mem):
+    mem["state"] = "OFF"
+
+
+def _side_of_obstacle(p):
+    left = p[0] + p[1]
+    right = p[3] + p[4]
+    if left > right:
+        return "left"
+    if right > left:
+        return "right"
+    return "left"        # obstacle exactly in front: arbitrary choice
+
+
 def _spin(side):
-    # object on the left -> spin right, and the opposite
+    # obstacle on the left -> spin right, and the opposite
     return (TURN_SPEED, -TURN_SPEED) if side == "left" else (-TURN_SPEED, TURN_SPEED)
 
-def local_nav_step(p, mem, alpha):
-    """p = prox_horizontal, alpha = heading error to the target (rad).
-    Returns (active, left, right). active = False -> use global navigation."""
+
+def local_nav_step(p, mem, alpha=None):
+    """p = prox_horizontal. Returns (active, left, right).
+    active = False -> use global navigation."""
     now = time.time()
-    front = max(p[1], p[2], p[3])
+    seen = max(p)
 
+    # ---------------- OFF: global navigation ----------------
     if mem["state"] == "OFF":
-        if front <= FRONT_THR:
+        if seen <= SEE_THR:
             return False, 0, 0
-        mem["side"] = "left" if (p[0] + p[1]) >= (p[3] + p[4]) else "right"
+        mem["side"] = _side_of_obstacle(p)       # chosen once, kept during the whole turn
         mem["state"], mem["t_state"] = "TURN", now
 
-    side = mem["side"]
-    side_val = p[0] if side == "left" else p[4]
-
-    # --- TURN: spin until parallel to the object ---
+    # ---------------- TURN: spin away until nothing is seen ----------------
     if mem["state"] == "TURN":
-        parallel = front < FRONT_CLEAR and side_val > SIDE_SEEN
-        if parallel or now - mem["t_state"] > TURN_TIMEOUT:
-            mem["state"] = "FOLLOW"
+        if seen < CLEAR_THR:
+            mem["state"], mem["t_state"] = "FORWARD", now
+        elif now - mem["t_state"] > TURN_TIMEOUT:
+            mem["state"] = "OFF"
+            return False, 0, 0
         else:
-            return (True, *_spin(side))
+            return True, *_spin(mem["side"])
 
-    # --- FOLLOW: drive along the object ---
-    if front > FRONT_THR:                       # corner or new obstacle ahead
-        mem["state"], mem["t_state"] = "TURN", now
-        return (True, *_spin(side))
+    # ---------------- FORWARD: drive straight for FORWARD_TIME ----------------
+    if mem["state"] == "FORWARD":
+        if seen > SEE_THR:                        # something new ahead: turn again
+            mem["side"] = _side_of_obstacle(p)
+            mem["state"], mem["t_state"] = "TURN", now
+            return True, *_spin(mem["side"])
+        if now - mem["t_state"] >= FORWARD_TIME:
+            mem["state"] = "OFF"                  # back to global navigation
+            return False, 0, 0
+        return True, SPEED, SPEED
 
-    if front < FRONT_CLEAR and abs(alpha) < ALPHA_TOL:
-        mem["state"] = "OFF"                    # facing the target: back to global
-        return False, 0, 0
-
-    # keep the side sensor near SIDE_TARGET; if the object is lost, curve toward it
-    err = max(-MAX_ERR, min(MAX_ERR, side_val - SIDE_TARGET))
-    s = 1 if side == "left" else -1
-    left = SPEED + s * FOLLOW_GAIN * err
-    right = SPEED - s * FOLLOW_GAIN * err
-    return True, left, right
+    return False, 0, 0
