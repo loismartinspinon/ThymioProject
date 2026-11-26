@@ -26,14 +26,14 @@ from Filtering import wrap_to_pi   # angle brought back into ]-pi, pi] (replaces
 # Parameters to calibrate
 # =============================================================================
 
-speed_turn = 100
-speed_forward = 220
+speed_turn = 400
+speed_forward = 150
 omega = 0.628                # rad/s at speed_turn
 v_forward = 4.833            # cm/s at speed_forward
 min_angle = np.radians(1)    # below this angle, the robot does not turn
 min_distance = 0.5           # below this distance (cm), the point is ignored
 
-k_rho, k_alpha, k_beta = 1.3, 1.35, 0.0
+k_rho, k_alpha, k_beta = 0.6, 0.9, 0.0
 assert k_rho > 0 and k_beta <= 0 and k_alpha - k_rho > 0
 
 v_max = 4.0
@@ -41,7 +41,7 @@ w_max = 0.7
 motor_max = 255
 l = 11.1 / 2
 speed_factor = speed_forward / v_forward
-dt = 0.05
+dt = 0
 
 # ---------- Format of theta0 given by the vision (TO CHECK) ----------
 THETA_IN_DEGREES = False     # True if theta0 is in degrees

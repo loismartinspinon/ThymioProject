@@ -26,8 +26,8 @@ WHEEL_BASE = 0.095 # needs to be calibrated
 # constants, to tune
 SIGMA_D2 = 1e-3      # variance added per meter driven
 SIGMA_TH2 = 1e-3     # variance added per radian turned
-Q_MIN = 1e-8         # small floor so P never becomes exactly 0
-R = np.diag([1e-5, 1e-5, 1e-5])   # camera uncertainty
+Q_MIN = 1e-5         # small floor so P never becomes exactly 0
+R = np.diag([2.5e-5, 2.5e-5, 3e-3])   # camera uncertainty
 H = np.eye(3)
 
 
