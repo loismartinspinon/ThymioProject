@@ -1,37 +1,23 @@
 """
-Motion controller of the Thymio (from Barth_MotionController.ipynb).
-
-run(data) -> follow_path -> move_to: for each point of the path, the robot turns on itself
-towards the point, then goes straight to it. Both moves are open loop (duration =
-angle / omega and distance / v_forward), with omega and v_forward calibrated in
-Barth_MotionController.ipynb.
-
-Usage (main.ipynb):
-    import MotionController as mc
-    await mc.run([x0, y0, theta0, path])    # cm, theta0 in the THETA_CONVENTION below
-run() locks the Thymio itself and always stops the motors at the end.
-
-Requires Thymio Suite (Thymio Device Manager) running and the Thymio connected.
-Do not also use tdmclient.notebook.start(): it already locks the Thymio, and node.lock()
-below would then fail with "Node lock error (current status: busy)".
+Motion controller 
 """
+
 import time
 import numpy as np
 from tdmclient import ClientAsync
 
 from Filtering import wrap_to_pi   # angle brought back into ]-pi, pi] (replaces normalize)
 
-
 # =============================================================================
 # Parameters to calibrate
 # =============================================================================
 
-speed_turn = 400
+#speed_turn = 400
 speed_forward = 150
-omega = 0.628                # rad/s at speed_turn
+#omega = 0.628                # rad/s at speed_turn
 v_forward = 4.833            # cm/s at speed_forward
-min_angle = np.radians(1)    # below this angle, the robot does not turn
-min_distance = 0.5           # below this distance (cm), the point is ignored
+#min_angle = np.radians(1)    # below this angle, the robot does not turn
+#min_distance = 0.5           # below this distance (cm), the point is ignored
 
 k_rho, k_alpha, k_beta = 0.6, 0.9, 0.0
 assert k_rho > 0 and k_beta <= 0 and k_alpha - k_rho > 0
@@ -51,9 +37,9 @@ THETA_CONVENTION = "math"    # "math"  : 0 = +x axis, counter-clockwise positive
 client = ClientAsync()
 
 # ---------- State of the robot ----------
-current_position = [0.0, 0.0]
-next_position = [0.0, 0.0]
-current_angle = 0.0          # 0 = towards +y, clockwise positive
+#current_position = [0.0, 0.0]
+#next_position = [0.0, 0.0]
+#current_angle = 0.0          # 0 = towards +y, clockwise positive
 
 
 # =============================================================================
@@ -74,13 +60,16 @@ def angle_to_target(pos, target):
     dy = target[1] - pos[1]
     return np.arctan2(dx, dy)
 
+'''
+def robot_to_math(a):
+    return wrap_to_pi(np.pi / 2 - a)
+'''
 
 async def set_motors(node, left, right):
     await node.set_variables({
         "motor.left.target": [int(left)],
         "motor.right.target": [int(right)],
     })
-
 
 # =============================================================================
 # Moves
@@ -109,9 +98,18 @@ def v_w_to_motors(v, w):
     speed_left = np.clip(v_left * speed_factor, -motor_max, motor_max)
     return speed_left, speed_right
 
-def robot_to_math(a):
-    return wrap_to_pi(np.pi / 2 - a)
+def run(x, y, theta, goal):
+    v, w = astolfi_controller(x, y, theta, goal)
+    left_speed, right_speed = v_w_to_motors(v, w)
 
+    return left_speed, right_speed
+
+async def open_node():
+    node = await client.wait_for_node()
+    await node.lock()
+    return node
+
+'''
 async def turn_to(node, target):
     global current_angle
     next_angle = angle_to_target(current_position, target)
@@ -236,7 +234,5 @@ async def move_segment(pose, target, is_last=False):
         await node.unlock()
     return moves
 
-async def open_node():
-    node = await client.wait_for_node()
-    await node.lock()
-    return node
+'''
+     
