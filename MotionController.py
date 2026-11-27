@@ -75,7 +75,7 @@ async def set_motors(node, left, right):
 # Moves
 # =============================================================================
 
-def astolfi_controller(x, y, theta, goal):
+def astolfi_controller(x, y, theta, goal): # Astolfi controller
     delta_x = goal[0] - x
     delta_y = goal[1] - y
 
@@ -87,7 +87,7 @@ def astolfi_controller(x, y, theta, goal):
     w = k_alpha * alpha + k_beta * beta
     return v, w
 
-def v_w_to_motors(v, w):
+def v_w_to_motors(v, w): # Converts v (linear speed) and w (angular speed) into motor speeds
     v = np.clip(v, -v_max, v_max)
     w = np.clip(w, -w_max, w_max)
 
